@@ -17,7 +17,7 @@
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  */
 {
-const VERSION = '2.2.0';
+const VERSION = '2.2.1';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -239,7 +239,7 @@ const STYLE = `
   .rc .pw small { display:block; font-size:11px; font-weight:400; text-align:right; opacity:.7; }
   .icons { display:flex; gap:6px; flex-wrap:wrap; }
   .ic { display:inline-flex; align-items:center; gap:4px; padding: 4px 8px; border-radius: 10px; font-size:13px; font-weight:600;
-  .ic.cam { cursor:pointer; } .ic.cam:hover { filter: brightness(1.25); outline: 1px solid color-mix(in srgb, var(--c) 50%, transparent); }
+  .ic.camic { cursor:pointer; } .ic.camic:hover { filter: brightness(1.25); outline: 1px solid color-mix(in srgb, var(--c) 50%, transparent); }
     color: var(--secondary-text-color); background: color-mix(in srgb, var(--secondary-text-color) 14%, var(--ha-card-background, var(--card-background-color))); }
   .ic ha-icon { --mdc-icon-size:18px; }
   .ic.on { color: var(--c); background: color-mix(in srgb, var(--c) 20%, var(--ha-card-background, var(--card-background-color))); }
@@ -789,7 +789,7 @@ class HomeDashboardCard extends HTMLElement {
     if (open.some((s) => s.state === 'on')) { const n = open.filter((s) => s.state === 'on').length; ic('mdi:window-open-variant', '#2196f3', n, true, `${n} offen`); }
     const cams = this._areaCams(a.area_id).map((id) => hass.states[id]);
     if (cams.length) {
-      out.push(`<span class="ic cam ${cams.some((s) => !BAD.includes(s.state)) ? 'on' : ''}" style="--c:#009688" data-cams="${esc(a.area_id)}"
+      out.push(`<span class="ic camic ${cams.some((s) => !BAD.includes(s.state)) ? 'on' : ''}" style="--c:#009688" data-cams="${esc(a.area_id)}"
         title="${cams.length > 1 ? `${cams.length} Kameras` : 'Kamera'}"><ha-icon icon="mdi:cctv"></ha-icon>${cams.length > 1 ? cams.length : ''}</span>`);
     }
     return out.join('');
