@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.1.2 – 12 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.1.3 – 12 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== esphome-manager-card.js ===== */
 {
@@ -7619,7 +7619,7 @@ if (!customElements.get('xsense-manager-card')) {
  *   links:                       # optional, zusätzliche Kacheln mit Verlinkung
  *     - { name: Frigate, icon: mdi:cctv, path: /dashboard-frigate, color: '#e53935' }
  */
-const VERSION = '1.3.0';
+const VERSION = '1.3.1';
 const EVT = 'area-overview-card-area';
 const STORE = 'area-overview-card.area';
 const BAD = ['unavailable', 'unknown'];
@@ -8041,8 +8041,17 @@ class AreaOverviewCard extends HTMLElement {
     if (hums.length) sum.push(`<span data-more="${hums[0].entity_id}"><ha-icon icon="mdi:water-percent"></ha-icon>${Math.round(avg(hums))} %</span>`);
     const pwh = this._powerEntity(area);
     if (pwh) sum.push(`<span data-more="${pwh.entity_id}"><ha-icon icon="mdi:flash"></ha-icon>${esc(this._fmtPower(pwh))}</span>`);
-    const camh = (this._config.cameras || {})[area.area_id];
-    if (camh && hass.states[camh]) sum.push(`<span data-more="${esc(camh)}"><ha-icon icon="mdi:cctv"></ha-icon>Kamera</span>`);
+    // ein Kamera-Button je Kamera des Bereichs (konfigurierte und zugeordnete), öffnet das Kamera-Popup
+    const cams = [...new Set([(this._config.cameras || {})[area.area_id], ...areaEnts.filter((e) => e.entity_id.startsWith('camera.')).map((e) => e.entity_id)])]
+      .filter((id) => id && hass.states[id]);
+    for (const id of cams) {
+      let nm = 'Kamera';
+      if (cams.length > 1) {
+        const fn = String(hass.states[id].attributes.friendly_name || id);
+        nm = fn.toLowerCase().startsWith(area.name.toLowerCase() + ' ') ? fn.slice(area.name.length + 1) : fn;
+      }
+      sum.push(`<span data-more="${esc(id)}" title="${esc(hass.states[id].attributes.friendly_name || id)}"><ha-icon icon="mdi:cctv"></ha-icon>${esc(nm)}</span>`);
+    }
     if (lights.length) sum.push(`<span data-more="${(lightsOn[0] || lights[0]).entity_id}"><ha-icon icon="${lightsOn.length ? 'mdi:lightbulb-on' : 'mdi:lightbulb-outline'}"></ha-icon>${lightsOn.length ? `${lightsOn.length} an` : 'aus'}</span>`);
     const nHidden = [...data.devices].filter((id) => HIDE.ids.has(id)).length + data.loose.filter((e) => HIDE.ents.has(e.entity_id)).length;
     if (nHidden || this._showHidden) {
@@ -8617,14 +8626,14 @@ if (!customElements.get('home-summary-card')) {
  *   solar_forecast: true                  # PV-Prognose aus den Energie-Einstellungen (Tageswert)
  *   power: { forecast: sensor.x_leistungsprognose, clearsky: sensor.x_clearsky_leistung }   # Kurven aus dem Attribut forecast
  *   area_power: { kinderzimmer: sensor.x }   # Standard: sensor.leistung_<bereich>
- *   cameras: { buro: camera.x, garage: camera.y }   # Kamera je Raum (Icon + Raum-Popup); camera_background: true zeigt sie zusätzlich groß in der Raumkachel
+ *   cameras: { buro: camera.x, garage: camera.y }   # Kamerabild im Hintergrund der Raumkachel (camera_background: false schaltet es ab)
  *   exclude_areas: [pv]
  *   hide_label: dashboard_ausgeblendet    # per Label ausgeblendete Geräte zählen nicht mit
  *   links: [{ name, icon, path, color, integration, entity }]
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  */
 {
-const VERSION = '2.1.2';
+const VERSION = '2.1.3';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -9406,7 +9415,7 @@ class HomeDashboardCard extends HTMLElement {
       const c = this._climate(a, sts);
       const pid = this._powerId(a);
       const p = num(hass.states[pid]);
-      const cam = this._config.camera_background && this._config.cameras[a.area_id] && hass.states[this._config.cameras[a.area_id]];
+      const cam = this._config.camera_background !== false && this._config.cameras[a.area_id] && hass.states[this._config.cameras[a.area_id]];
       const sub = [c.temp != null && `${nf(c.temp)} °C`, c.hum != null && `${nf(c.hum, 0)} %`].filter(Boolean).join(' · ');
       return `<div class="card rc click ${cam ? 'withcam' : ''}" data-k="${esc(a.area_id)}" data-pop="area:${esc(a.area_id)}">
         ${cam ? '<div class="cam" data-keep></div>' : ''}<div class="bgl">${cam ? '' : this._spark(pid)}</div>
@@ -9432,7 +9441,7 @@ class HomeDashboardCard extends HTMLElement {
   /** Kamerabilder einmalig in die Raumkacheln hängen (bleiben beim Aktualisieren erhalten) */
   _mountCams() {
     const hass = this._hass;
-    for (const [areaId, id] of Object.entries(this._config.camera_background ? this._config.cameras || {} : {})) {
+    for (const [areaId, id] of Object.entries(this._config.camera_background !== false ? this._config.cameras || {} : {})) {
       const slot = this.shadowRoot.querySelector(`.rc[data-k="${window.CSS && window.CSS.escape ? window.CSS.escape(areaId) : areaId}"] .cam`);
       if (!slot || !hass.states[id]) continue;
       let c = this._camEls[id];
@@ -9571,18 +9580,6 @@ class HomeDashboardCard extends HTMLElement {
       const c = this._climate(a, sts); const pv = num(this._hass.states[this._powerId(a)]);
       this._popHead(a.icon || 'mdi:texture-box', 'var(--primary-color)', a.name,
         [c.temp != null && `${nf(c.temp)} °C`, c.hum != null && `${nf(c.hum, 0)} %`, pv != null && fW(pv)].filter(Boolean).join(' · '), 1280);
-      // alle Kameras des Raums (zugeordnete und konfigurierte) oben im Popup
-      const cams = [...new Set([this._config.cameras[a.area_id], ...sts.filter((s) => s.entity_id.startsWith('camera.')).map((s) => s.entity_id)])]
-        .filter((id) => id && this._hass.states[id]);
-      if (cams.length) {
-        const slot = document.createElement('div');
-        slot.className = 'cams';
-        p.r.querySelector('.host').appendChild(slot);
-        this._card({ type: 'grid', columns: Math.min(cams.length, 2), square: false,
-          cards: cams.map((id) => ({ type: 'picture-entity', entity: id, show_state: false, camera_view: 'auto' })) })
-          .then((g) => { if (this._pop !== p) return; g.hass = this._hass; p.els.push(g); slot.appendChild(g); })
-          .catch((err) => console.warn('home-dashboard-card:', err));
-      }
       const el = document.createElement('area-overview-card');
       el.setConfig({ mode: 'devices', makers: this._config.makers, power: this._config.area_power, cameras: this._config.cameras,
         min_width: 300, hide_label: this._config.hide_label });
@@ -9715,4 +9712,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.1.2 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.1.3 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');

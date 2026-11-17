@@ -10,14 +10,14 @@
  *   solar_forecast: true                  # PV-Prognose aus den Energie-Einstellungen (Tageswert)
  *   power: { forecast: sensor.x_leistungsprognose, clearsky: sensor.x_clearsky_leistung }   # Kurven aus dem Attribut forecast
  *   area_power: { kinderzimmer: sensor.x }   # Standard: sensor.leistung_<bereich>
- *   cameras: { buro: camera.x, garage: camera.y }   # Kamera je Raum (Icon + Raum-Popup); camera_background: true zeigt sie zusätzlich groß in der Raumkachel
+ *   cameras: { buro: camera.x, garage: camera.y }   # Kamerabild im Hintergrund der Raumkachel (camera_background: false schaltet es ab)
  *   exclude_areas: [pv]
  *   hide_label: dashboard_ausgeblendet    # per Label ausgeblendete Geräte zählen nicht mit
  *   links: [{ name, icon, path, color, integration, entity }]
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  */
 {
-const VERSION = '2.1.2';
+const VERSION = '2.1.3';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -799,7 +799,7 @@ class HomeDashboardCard extends HTMLElement {
       const c = this._climate(a, sts);
       const pid = this._powerId(a);
       const p = num(hass.states[pid]);
-      const cam = this._config.camera_background && this._config.cameras[a.area_id] && hass.states[this._config.cameras[a.area_id]];
+      const cam = this._config.camera_background !== false && this._config.cameras[a.area_id] && hass.states[this._config.cameras[a.area_id]];
       const sub = [c.temp != null && `${nf(c.temp)} °C`, c.hum != null && `${nf(c.hum, 0)} %`].filter(Boolean).join(' · ');
       return `<div class="card rc click ${cam ? 'withcam' : ''}" data-k="${esc(a.area_id)}" data-pop="area:${esc(a.area_id)}">
         ${cam ? '<div class="cam" data-keep></div>' : ''}<div class="bgl">${cam ? '' : this._spark(pid)}</div>
@@ -825,7 +825,7 @@ class HomeDashboardCard extends HTMLElement {
   /** Kamerabilder einmalig in die Raumkacheln hängen (bleiben beim Aktualisieren erhalten) */
   _mountCams() {
     const hass = this._hass;
-    for (const [areaId, id] of Object.entries(this._config.camera_background ? this._config.cameras || {} : {})) {
+    for (const [areaId, id] of Object.entries(this._config.camera_background !== false ? this._config.cameras || {} : {})) {
       const slot = this.shadowRoot.querySelector(`.rc[data-k="${window.CSS && window.CSS.escape ? window.CSS.escape(areaId) : areaId}"] .cam`);
       if (!slot || !hass.states[id]) continue;
       let c = this._camEls[id];
@@ -964,18 +964,6 @@ class HomeDashboardCard extends HTMLElement {
       const c = this._climate(a, sts); const pv = num(this._hass.states[this._powerId(a)]);
       this._popHead(a.icon || 'mdi:texture-box', 'var(--primary-color)', a.name,
         [c.temp != null && `${nf(c.temp)} °C`, c.hum != null && `${nf(c.hum, 0)} %`, pv != null && fW(pv)].filter(Boolean).join(' · '), 1280);
-      // alle Kameras des Raums (zugeordnete und konfigurierte) oben im Popup
-      const cams = [...new Set([this._config.cameras[a.area_id], ...sts.filter((s) => s.entity_id.startsWith('camera.')).map((s) => s.entity_id)])]
-        .filter((id) => id && this._hass.states[id]);
-      if (cams.length) {
-        const slot = document.createElement('div');
-        slot.className = 'cams';
-        p.r.querySelector('.host').appendChild(slot);
-        this._card({ type: 'grid', columns: Math.min(cams.length, 2), square: false,
-          cards: cams.map((id) => ({ type: 'picture-entity', entity: id, show_state: false, camera_view: 'auto' })) })
-          .then((g) => { if (this._pop !== p) return; g.hass = this._hass; p.els.push(g); slot.appendChild(g); })
-          .catch((err) => console.warn('home-dashboard-card:', err));
-      }
       const el = document.createElement('area-overview-card');
       el.setConfig({ mode: 'devices', makers: this._config.makers, power: this._config.area_power, cameras: this._config.cameras,
         min_width: 300, hide_label: this._config.hide_label });
