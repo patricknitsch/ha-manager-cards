@@ -481,7 +481,8 @@ class AreaOverviewCard extends HTMLElement {
       try {
         if (mk.area !== area.area_id || full) {
           const { type, tag, name, icon, ...cfg } = m;
-          mk.el.setConfig({ ...cfg, area_filter: area.area_id, show_hidden: !!this._showHidden });
+          // gleiche Kachelbreite für alle Hersteller und „Weitere Geräte“
+          mk.el.setConfig({ ...cfg, min_width: this._config.min_width, area_filter: area.area_id, show_hidden: !!this._showHidden });
           mk.area = area.area_id;
         }
         if (full || !mk.wrap.hidden) mk.el.hass = hass;

@@ -48,3 +48,14 @@ npm run check   bauen + Syntaxprüfung
 ```
 
 Neue Version: Version in `package.json` erhöhen, `npm run build`, committen, Tag `vX.Y.Z` pushen. Die GitHub Action baut das Bundle und hängt es an das Release, darüber holt der Marketplace das Update.
+
+
+## Start-Dashboard: Home-Assistant-Log als Popup
+
+Ein Eintrag in `links` mit `popup: log` öffnet statt einer Seite ein Popup mit dem Systemprotokoll (Fehler, Warnungen, Info;
+Filter, Suche, Details zum Aufklappen). Im Link stehen die Anzahl der Fehler und Warnungen. Nur für Administratoren.
+
+```yaml
+links:
+  - { name: HA-Log, icon: mdi:math-log, color: "#03a9f4", popup: log }
+```

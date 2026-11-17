@@ -17,7 +17,7 @@
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  */
 {
-const VERSION = '2.0.1';
+const VERSION = '2.1.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -141,14 +141,16 @@ const STYLE = `
   .greet { flex:1; min-width:0; }
   .greet .g { font-size: 28px; font-weight: 600; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .greet .s { font-size: 14px; color: var(--secondary-text-color); margin-top:2px; }
-  .who { display:flex; flex-direction:column; align-items:center; gap:2px; flex:none; }
-  .wx { display:flex; align-items:center; gap:3px; cursor:pointer; padding:2px 6px; border-radius:10px; }
+  .gl { display:flex; align-items:center; gap:10px; min-width:0; }
+  .gl .g { min-width:0; }
+  .wx { display:flex; align-items:center; gap:4px; cursor:pointer; padding:2px 8px; border-radius:12px; flex:none; }
   .wx:hover { background: var(--secondary-background-color); }
-  .wx ha-icon { --mdc-icon-size: 22px; color: var(--amber-color, #ffc107); }
-  .wx span { font-size: 14px; font-weight: 600; white-space:nowrap; }
+  .wx ha-icon { --mdc-icon-size: 28px; color: var(--amber-color, #ffc107); }
+  .wx span { font-size: 20px; font-weight: 600; white-space:nowrap; }
   .greet .s .tm { font-weight: 600; color: var(--primary-text-color); font-variant-numeric: tabular-nums; }
   @media (max-width: 600px) { .greet .g { font-size: 20px; white-space:normal; } .hdr { gap:10px; }
-    .stat { grid-template-columns: repeat(4, 1fr); } .si .l { font-size:11px; } .av { width:48px; height:48px; } }
+    .stat { grid-template-columns: repeat(4, 1fr); } .si .l { font-size:11px; } .av { width:48px; height:48px; }
+    .wx ha-icon { --mdc-icon-size: 22px; } .wx span { font-size: 16px; } }
 
   /* Status-Icons */
   .stat { display:grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; }
@@ -280,6 +282,25 @@ const POP_CSS = `
   .warn b { font-size:16px; } .warn .tm { font-size:12px; color: var(--secondary-text-color); } .warn p { margin:0; font-size:14px; line-height:1.45; }
   .sec { font-weight:600; margin: 4px 4px 0; }
   .host > * { display:block; }
+  .host > .cams { margin-bottom: 14px; }
+  .lbar { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .lf { background: var(--secondary-background-color); color: var(--primary-text-color); border:1px solid var(--divider-color); border-radius:16px;
+    padding:5px 12px; font: inherit; font-size:13px; cursor:pointer; }
+  .lf b { font-weight:600; opacity:.7; } .lf.on { background: var(--primary-color); color: var(--text-primary-color, #fff); border-color: transparent; }
+  .lq { flex:1; min-width:140px; background: var(--secondary-background-color); color: var(--primary-text-color); border:1px solid var(--divider-color);
+    border-radius:10px; padding:7px 10px; font: inherit; font-size:14px; }
+  .lbar .btn { padding:6px 12px; font-size:13px; }
+  .linf { font-size:12px; color: var(--secondary-text-color); margin: 0 4px; }
+  .le { padding:9px 14px 9px 12px; border-top:1px solid var(--divider-color); border-left:4px solid var(--c); cursor:pointer; }
+  .le:first-child { border-top:none; } .le:hover { background: var(--secondary-background-color); }
+  .le .lh { display:flex; gap:8px; align-items:baseline; }
+  .le .lv { font-size:11px; font-weight:700; color: var(--c); text-transform:uppercase; flex:none; min-width:58px; }
+  .le .lm { flex:1; font-size:14px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .le .lc { font-size:11px; padding:1px 7px; border-radius:9px; background: var(--secondary-background-color); flex:none; }
+  .le .ls { font-size:11.5px; color: var(--secondary-text-color); margin: 2px 0 0 66px; overflow-wrap:anywhere; }
+  .le pre { margin:8px 0 2px; padding:10px; background: var(--secondary-background-color); border-radius:8px; font-size:12px; line-height:1.4;
+    white-space:pre-wrap; word-break:break-word; max-height:360px; overflow:auto; cursor:text; }
+  @media (max-width: 600px) { .le .ls { margin-left:0; } }
   @media (max-width: 600px) { .bg { align-items:flex-end; padding:0; } .pop { border-radius:24px 24px 0 0; max-height:92vh; width:100%; } }
 `;
 
@@ -298,7 +319,7 @@ class HomeDashboardCard extends HTMLElement {
 
   connectedCallback() {
     clearInterval(this._tick);
-    this._tick = setInterval(() => { this._renderHeader(); this._fetchHist(); this._fetchForecast(); this._renderHaus(); }, 30000);
+    this._tick = setInterval(() => { this._renderHeader(); this._fetchHist(); this._fetchForecast(); this._renderHaus(); this._fetchLog(); }, 30000);
     this._onHide = () => this._render();
     HIDE.subs.add(this._onHide);
   }
@@ -312,6 +333,29 @@ class HomeDashboardCard extends HTMLElement {
     if (this._pop) this._updatePopup();
     if (!this._histTs) this._fetchHist();
     if (!this._fcTs) this._fetchForecast();
+    if (!this._logTs) this._fetchLog();
+  }
+
+  /* ---------- Home-Assistant-Log (Systemprotokoll, nur Admins) ---------- */
+  async _fetchLog(force) {
+    const hass = this._hass;
+    const wanted = (this._config.links || []).some((l) => l.popup === 'log');
+    if (!hass || !wanted || this._logBusy) return;
+    if (!force && this._logTs && Date.now() - this._logTs < 120000) return;
+    this._logBusy = true;
+    try {
+      const list = await hass.callWS({ type: 'system_log/list' });
+      this._log = (list || []).slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      this._logErr = '';
+    } catch (err) {
+      this._log = this._log || [];
+      this._logErr = err && err.code === 'unauthorized' ? 'Nur für Administratoren verfügbar.' : (err.message || String(err));
+    } finally {
+      this._logTs = Date.now(); this._logBusy = false;
+      const lv = (e) => String(e.level || '').toUpperCase();
+      this._logSum = { err: this._log.filter((e) => ['ERROR', 'CRITICAL'].includes(lv(e))).length, warn: this._log.filter((e) => lv(e) === 'WARNING').length };
+      if (this._hass) { this._renderLinks(); if (this._pop?.key === 'log') this._updatePopup(); }
+    }
   }
 
   /* ---------- Grundgerüst ---------- */
@@ -466,9 +510,9 @@ class HomeDashboardCard extends HTMLElement {
     const pic = p?.attributes.entity_picture;
     const t = w?.attributes.temperature;
     const html = `<div class="hdr">
-      <div class="who"><div class="av ${p && p.state !== 'home' ? 'away' : ''}" data-more="${esc(this._config.person || '')}" ${pic ? `style="background-image:url('${esc(pic)}')"` : ''}>${pic ? '' : '<ha-icon icon="mdi:account"></ha-icon>'}</div>
-        ${w ? `<div class="wx" data-more="${esc(this._config.weather)}"><ha-icon icon="${WX[w.state] || 'mdi:weather-cloudy'}"></ha-icon><span>${t != null ? `${nf(t)}°` : '–'}</span></div>` : ''}</div>
-      <div class="greet"><div class="g">${esc(greet)}</div><div class="s">${esc(now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }))} · <span class="tm">${now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr</span></div></div></div>`;
+      <div class="av ${p && p.state !== 'home' ? 'away' : ''}" data-more="${esc(this._config.person || '')}" ${pic ? `style="background-image:url('${esc(pic)}')"` : ''}>${pic ? '' : '<ha-icon icon="mdi:account"></ha-icon>'}</div>
+      <div class="greet"><div class="gl"><div class="g">${esc(greet)}</div>
+        ${w ? `<div class="wx" data-more="${esc(this._config.weather)}" title="${esc(w.attributes.friendly_name || '')}"><ha-icon icon="${WX[w.state] || 'mdi:weather-cloudy'}"></ha-icon><span>${t != null ? `${nf(t)}°` : '–'}</span></div>` : ''}</div><div class="s">${esc(now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }))} · <span class="tm">${now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr</span></div></div></div>`;
     this._set('hdr', html);
   }
 
@@ -694,6 +738,12 @@ class HomeDashboardCard extends HTMLElement {
         const st = hass.states[l.entity];
         info.push(esc(typeof hass.formatEntityState === 'function' ? hass.formatEntityState(st) : st.state));
       }
+      if (l.popup === 'log') {
+        const s = this._logSum;
+        if (!s) info.push('Home Assistant Log');
+        else if (s.err) info.push(`<span class="err">${s.err} Fehler</span>`, ...(s.warn ? [`<span class="warn">${s.warn} Warnung${s.warn === 1 ? '' : 'en'}</span>`] : []));
+        else info.push(s.warn ? `<span class="warn">${s.warn} Warnung${s.warn === 1 ? '' : 'en'}</span>` : '<span class="ok">keine Fehler</span>');
+      }
       if (l.text) info.push(esc(l.text));
       return `<div class="card lk click" data-k="l${i}" data-link="${i}" style="--c:${esc(l.color || 'var(--primary-color)')}">
         <div class="bub"><ha-icon icon="${esc(l.icon || 'mdi:open-in-app')}"></ha-icon></div>
@@ -796,7 +846,11 @@ class HomeDashboardCard extends HTMLElement {
     const more = path.find((el) => el.dataset && el.dataset.more);
     if (more && more.dataset.more) { e.stopPropagation(); this._fire('hass-more-info', { entityId: more.dataset.more }); return; }
     const link = path.find((el) => el.dataset && el.dataset.link);
-    if (link) { const l = this._config.links[Number(link.dataset.link)]; if (l?.path) this._navigate(l.path); return; }
+    if (link) {
+      const l = this._config.links[Number(link.dataset.link)];
+      if (l?.popup) this._openPopup(l.popup); else if (l?.path) this._navigate(l.path);
+      return;
+    }
     const pop = path.find((el) => el.dataset && el.dataset.pop);
     if (pop) this._openPopup(pop.dataset.pop);
   }
@@ -814,6 +868,10 @@ class HomeDashboardCard extends HTMLElement {
         if (window.confirm(`Update für ${ds.n} installieren?`)) await hass.callService('update', 'install', { entity_id: ds.e });
       } else if (ds.act === 'device') {
         this._closePopup(); this._navigate(`/config/devices/device/${ds.d}`);
+      } else if (ds.act === 'logf') { this._logF = ds.v; this._updatePopup();
+      } else if (ds.act === 'logx') { if (this._logOpen.has(ds.k)) this._logOpen.delete(ds.k); else this._logOpen.add(ds.k); this._updatePopup();
+      } else if (ds.act === 'logr') { this._fetchLog(true);
+      } else if (ds.act === 'logall') { this._closePopup(); this._navigate('/config/logs');
       } else if (ds.act === 'close') this._closePopup();
     } catch (err) {
       this._fire('hass-notification', { message: `Fehler: ${err.message || err}` });
@@ -855,6 +913,10 @@ class HomeDashboardCard extends HTMLElement {
       const more = path.find((el) => el.dataset && el.dataset.more);
       if (more && r.contains(more)) this._fire('hass-more-info', { entityId: more.dataset.more });
     });
+    r.querySelector('.bg').addEventListener('input', (e) => {
+      const t = e.composedPath()[0];
+      if (t && t.dataset && t.dataset.logq != null) { this._logQ = t.value.toLowerCase(); this._updatePopup(); }
+    });
     this._escKey = (e) => { if (e.key === 'Escape' && this._pop) this._closePopup(); };
     window.addEventListener('keydown', this._escKey);
     document.body.appendChild(host);
@@ -862,6 +924,7 @@ class HomeDashboardCard extends HTMLElement {
   }
 
   _closePopup() {
+    clearInterval(this._logTick);
     if (!this._pop) return;
     this._pop.host.remove();
     window.removeEventListener('keydown', this._escKey);
@@ -898,11 +961,29 @@ class HomeDashboardCard extends HTMLElement {
       const c = this._climate(a, sts); const pv = num(this._hass.states[this._powerId(a)]);
       this._popHead(a.icon || 'mdi:texture-box', 'var(--primary-color)', a.name,
         [c.temp != null && `${nf(c.temp)} °C`, c.hum != null && `${nf(c.hum, 0)} %`, pv != null && fW(pv)].filter(Boolean).join(' · '), 1280);
+      // alle Kameras des Raums (zugeordnete und konfigurierte) oben im Popup
+      const cams = [...new Set([this._config.cameras[a.area_id], ...sts.filter((s) => s.entity_id.startsWith('camera.')).map((s) => s.entity_id)])]
+        .filter((id) => id && this._hass.states[id]);
+      if (cams.length) {
+        const slot = document.createElement('div');
+        slot.className = 'cams';
+        p.r.querySelector('.host').appendChild(slot);
+        this._card({ type: 'grid', columns: Math.min(cams.length, 2), square: false,
+          cards: cams.map((id) => ({ type: 'picture-entity', entity: id, show_state: false, camera_view: 'auto' })) })
+          .then((g) => { if (this._pop !== p) return; g.hass = this._hass; p.els.push(g); slot.appendChild(g); })
+          .catch((err) => console.warn('home-dashboard-card:', err));
+      }
       const el = document.createElement('area-overview-card');
       el.setConfig({ mode: 'devices', makers: this._config.makers, power: this._config.area_power, cameras: this._config.cameras,
         min_width: 300, hide_label: this._config.hide_label });
       el._area = arg;
       this._popEl(el);
+    } else if (kind === 'log') {
+      this._logF = this._logF || 'all'; this._logQ = ''; this._logOpen = new Set();
+      this._popHead('mdi:math-log', '#03a9f4', 'Home Assistant Log', 'Systemprotokoll', 1040);
+      this._fetchLog(true);
+      clearInterval(this._logTick);
+      this._logTick = setInterval(() => this._fetchLog(true), 10000);
     } else if (kind === 'power') {
       const pw = this._config.power;
       this._popEl({ type: 'history-graph', hours_to_show: 24, entities: [pw.house, pw.pv, pw.grid, pw.battery].filter(Boolean).map((e) => ({ entity: e })) })
@@ -963,6 +1044,32 @@ class HomeDashboardCard extends HTMLElement {
           + sec('Nicht erreichbar', d.offline.map(({ devId, d: dv }) => `<div class="it" data-k="${esc(devId)}" data-act="device" data-d="${esc(devId)}"><ha-icon icon="mdi:lan-disconnect" style="--c:#db4437"></ha-icon>
             <div class="n">${esc(dv.name_by_user || dv.name)}<small>${esc([hass.areas[dv.area_id]?.name, dv.manufacturer, dv.model].filter(Boolean).join(' · '))}</small></div></div>`));
         return html || '<div class="none">Nichts zu tun.</div>';
+      }
+      case 'log': {
+        const lv = (e) => String(e.level || '').toUpperCase();
+        const LV = { CRITICAL: ['Kritisch', '#9c27b0'], ERROR: ['Fehler', '#f44336'], WARNING: ['Warnung', '#ff9800'], INFO: ['Info', '#03a9f4'], DEBUG: ['Debug', '#9e9e9e'] };
+        const all = this._log || [];
+        const cnt = (f) => all.filter(f).length;
+        const fl = { all: () => true, error: (e) => ['ERROR', 'CRITICAL'].includes(lv(e)), warning: (e) => lv(e) === 'WARNING', info: (e) => ['INFO', 'DEBUG'].includes(lv(e)) };
+        const q = this._logQ || '';
+        const rows = all.filter(fl[this._logF] || fl.all).filter((e) => !q || `${e.name} ${(e.message || []).join(' ')} ${(e.source || []).join(':')}`.toLowerCase().includes(q));
+        const tab = (v, t, n) => `<button class="lf ${this._logF === v ? 'on' : ''}" data-act="logf" data-v="${v}">${t}${n != null ? ` <b>${n}</b>` : ''}</button>`;
+        const ts = (t) => (t ? new Date(t * 1000).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '');
+        const bar = `<div class="lbar">${tab('all', 'Alle', all.length)}${tab('error', 'Fehler', cnt(fl.error))}${tab('warning', 'Warnungen', cnt(fl.warning))}${tab('info', 'Info', cnt(fl.info))}
+          <input class="lq" data-logq placeholder="Suchen …" type="search">
+          <button class="btn sec" data-act="logr" title="Neu laden">↻</button><button class="btn sec" data-act="logall">Vollständiges Log</button></div>
+          <div class="linf">${this._logErr ? `<span style="color:#f44336">${esc(this._logErr)}</span>` : `Stand ${this._logTs ? new Date(this._logTs).toLocaleTimeString('de-DE') : '–'} · aktualisiert sich alle 10 s`}</div>`;
+        const body = rows.length ? `<div class="lst">${rows.map((e) => {
+          const k = `${e.name}|${(e.source || []).join(':')}|${(e.message || [])[0] || ''}`;
+          const [lt, lc] = LV[lv(e)] || [e.level, '#9e9e9e'];
+          const open = this._logOpen.has(k);
+          const msg = (e.message || []);
+          return `<div class="le" data-k="${esc(k)}" data-act="logx" style="--c:${lc}">
+            <div class="lh"><span class="lv">${esc(lt)}</span><span class="lm">${esc(msg[0] || '')}</span>${e.count > 1 ? `<span class="lc">${e.count}×</span>` : ''}</div>
+            <div class="ls">${esc(ts(e.timestamp))} · ${esc(e.name || '')}${e.source ? ` · ${esc(e.source.join(':'))}` : ''}</div>
+            ${open ? `<pre>${esc(msg.join('\n\n'))}${e.exception ? `\n\n${esc(e.exception)}` : ''}</pre>` : ''}</div>`;
+        }).join('')}</div>` : `<div class="none">${all.length ? 'Keine Einträge passen zum Filter.' : 'Keine Einträge im Systemprotokoll.'}</div>`;
+        return bar + body;
       }
       case 'dwd': {
         const ws = this._warnings();
