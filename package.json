@@ -1,0 +1,12 @@
+{
+  "name": "ha-manager-cards",
+  "version": "1.0.0",
+  "description": "Geräteseiten (Manager Cards) und Übersichts-Dashboard für Home Assistant im Stil des ioBroker Device Managers",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs && node --check dist/ha-manager-cards.js"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,50 @@
+# HA Manager Cards
+
+Geräteseiten für Home Assistant im Stil des ioBroker Device Managers – je Gerätefamilie eine Karte – plus ein Übersichts-Dashboard im Stil von Dwains Dashboard, das die Geräteseiten als Popup öffnet.
+
+Alle Karten stecken in **einer** Datei (`dist/ha-manager-cards.js`). In Home Assistant gibt es dadurch nur eine Ressource.
+
+## Karten
+
+| Karte | Typ | Integration |
+|---|---|---|
+| Shelly Manager | `custom:shelly-manager-card` | `shelly` |
+| Tasmota Manager | `custom:tasmota-manager-card` | `tasmota` |
+| ESPHome Manager | `custom:esphome-manager-card` | `esphome` |
+| X-Sense Manager | `custom:xsense-manager-card` | `xsense` |
+| Proxmox Manager | `custom:proxmox-manager-card` | `proxmoxve` |
+| Miele Manager | `custom:miele-manager-card` | `miele_lan` |
+| Grohe Manager | `custom:grohe-manager-card` | `grohe_smarthome` |
+| Schlüter Manager | `custom:schlueter-manager-card` | `ojmicroline_thermostat` |
+| Pi-hole Manager | `custom:pihole-manager-card` | `pi_hole` |
+| LocalThings Manager | `custom:localthings-manager-card` | `localthings` |
+| Bereichsübersicht | `custom:area-overview-card` | – (nutzt die Manager Cards) |
+| Home Dashboard | `custom:home-dashboard-card` | – (Startseite) |
+
+Die Konfigurationsoptionen stehen jeweils im Kopfkommentar der Datei in `src/`.
+
+## Installation über den Marketplace
+
+1. **Einstellungen → Marketplace → Aus Link hinzufügen**, Repository-URL eintragen, Kategorie *Dashboard*.
+2. „HA Manager Cards“ installieren. Die Ressource wird automatisch eingetragen (`/local/community/ha-manager-cards/ha-manager-cards.js?v=…`).
+3. Die bisherigen einzelnen Inline-Ressourcen der Karten unter **Einstellungen → Dashboards → Ressourcen** entfernen, sonst sind die Karten doppelt registriert (die zuerst geladene gewinnt).
+
+## Manuelle Installation
+
+`dist/ha-manager-cards.js` nach `/config/www/ha-manager-cards/` kopieren und als Ressource (Typ *JavaScript-Modul*) eintragen:
+
+```
+/local/ha-manager-cards/ha-manager-cards.js?v=1.0.0
+```
+
+Bei jedem Update die Versionsnummer in der URL erhöhen, sonst lädt der Browser die alte Datei aus dem Cache.
+
+## Entwicklung
+
+```
+src/            eine Datei je Karte
+build.mjs       baut dist/ha-manager-cards.js
+npm run check   bauen + Syntaxprüfung
+```
+
+Neue Version: Version in `package.json` erhöhen, `npm run build`, committen, Tag `vX.Y.Z` pushen. Die GitHub Action baut das Bundle und hängt es an das Release, darüber holt der Marketplace das Update.
