@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.2.0 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.3.0 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== esphome-manager-card.js ===== */
 {
@@ -5363,9 +5363,18 @@ if (!customElements.get('schlueter-manager-card')) {
  *   capacity: 10               # nutzbare Kapazität in kWh (sonst aus dem Modell geschätzt)
  *   min_width: 400             # Mindestbreite einer Kachel in px
  *   confirm: true              # Rückfrage vor Schaltvorgängen
+ *   log_script: script.senec_geraeteprotokoll   # Skript, das das Tagesprotokoll des Speichers liefert (Antwort {text, code})
+ *   statistics:                # Leistungs-Sensoren für die Wochenstatistik (Standard: SENEC-Sensoren)
+ *     pv: sensor.x
+ *     house: sensor.x
+ *     grid_import: sensor.x
+ *     grid_export: sensor.x
+ *     bat_charge: sensor.x
+ *     bat_discharge: sensor.x
+ *     soc: sensor.x
  */
 {
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const BAD = ['unavailable', 'unknown', ''];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const nf = (v, d = 1) => Number(v).toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -5492,6 +5501,35 @@ const STYLE = `
     background: rgba(3,169,244,.10); border:1px solid rgba(3,169,244,.35); font-size:14px; }
   .note ha-icon { color:#03a9f4; } .note div { flex:1; min-width:200px; }
   .empty { padding:24px; text-align:center; color: var(--secondary-text-color); }
+  .lbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .lbar input, .lbar select { background: var(--secondary-background-color); color: var(--primary-text-color); border:1px solid var(--divider-color);
+    border-radius:8px; padding:6px 10px; font: inherit; font-size:14px; }
+  .lbar input[type=search] { flex:1; min-width:160px; }
+  .ltab { margin-top:10px; max-height:560px; overflow:auto; border:1px solid var(--divider-color); border-radius:10px; }
+  table.log { font-size:13px; }
+  table.log th { position:sticky; top:0; background: var(--secondary-background-color); padding:8px 10px; text-align:left; z-index:1; }
+  table.log td { text-align:left; font-weight:400; padding:6px 10px; vertical-align:top; color: var(--primary-text-color); }
+  table.log td:first-child { white-space:nowrap; color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
+  table.log td:last-child { font-family: var(--code-font-family, monospace); font-size:12px; white-space:pre-wrap; word-break:break-word; }
+  table.log tr.err td { background: rgba(219,68,55,.10); } table.log tr.warn td { background: rgba(255,166,0,.10); }
+  table.stat td, table.stat th { text-align:right; } table.stat td:first-child, table.stat th:first-child { text-align:left; }
+  table.stat td:last-child { font-family:inherit; font-size:13px; }
+  .lv { display:inline-block; min-width:20px; text-align:center; font-weight:700; border-radius:5px; padding:0 4px; color: var(--secondary-text-color); }
+  .lv.err { color: var(--error-color, #db4437); } .lv.warn { color: var(--warning-color, #ffa600); } .lv.info { color:#03a9f4; }
+  .sers { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .ser { display:inline-flex; align-items:center; gap:6px; font: inherit; font-size:12px; padding:4px 10px; border-radius:14px; cursor:pointer;
+    border:1px solid var(--divider-color); background:none; color: var(--secondary-text-color); }
+  .ser i { width:10px; height:10px; border-radius:50%; border:2px solid var(--c); }
+  .ser.on { color: var(--primary-text-color); background: color-mix(in srgb, var(--c) 12%, transparent); } .ser.on i { background: var(--c); }
+  .chart { position:relative; margin-top:6px; }
+  .chart svg { width:100%; height:300px; display:block; overflow:visible; }
+  .chart .yl, .chart .yr, .chart .xl { position:absolute; font-size:11px; color: var(--secondary-text-color); transform: translateY(-50%); pointer-events:none; white-space:nowrap; }
+  .chart .yl { text-align:right; } .chart .xl { top: calc(300px - 13px); } .chart .xl.c { transform: translate(-50%, -50%); }
+  .chart .gl { stroke: var(--divider-color); } .chart .dl { stroke: var(--divider-color); stroke-dasharray:3 3; } .chart .hl { stroke: var(--primary-text-color); opacity:.5; }
+  .chart .ax { display:flex; justify-content:space-between; font-size:11px; color: var(--secondary-text-color); margin-top:-2px; }
+  .tip { position:absolute; top:8px; left:56px; background: var(--card-background-color); border:1px solid var(--divider-color); border-radius:10px; padding:8px 10px;
+    font-size:12px; display:flex; flex-direction:column; gap:2px; pointer-events:none; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+  .tip span { display:flex; align-items:center; gap:6px; } .tip span b { margin-left:auto; padding-left:12px; } .tip i { width:8px; height:8px; border-radius:50%; background: var(--c); }
   [hidden] { display:none !important; }
 `;
 
@@ -5634,7 +5672,249 @@ class SenecManagerCard extends HTMLElement {
     P.push(this._pSystem(main, web));
     P.push(this._pFunctions());
     P.push(this._pControl());
+    P.push(`<div class="p wide" data-k="log" style="--c:#546e7a"><h3><ha-icon icon="mdi:text-box-search-outline"></ha-icon>Geräteprotokoll<small id="logcnt"></small></h3><div id="logb" data-keep></div></div>`);
+    P.push(`<div class="p wide" data-k="stat" style="--c:#2196f3"><h3><ha-icon icon="mdi:chart-timeline-variant"></ha-icon>Statistik<small id="statinfo"></small></h3><div id="statb" data-keep></div></div>`);
     morph(root.getElementById('grid'), P.filter(Boolean).join(''));
+    if (!this._logInit) { this._logInit = true; this._renderLog(); }
+    if (!this._statInit) { this._statInit = true; this._renderStat(); }
+  }
+
+  /* ---------- Geräteprotokoll (Tageslog des Speichers, über ein Skript mit Antwort) ---------- */
+  _utcDay(d = new Date()) { return d.toISOString().slice(0, 10); }
+
+  async _loadLog(quiet) {
+    const L = this._log || (this._log = { date: this._utcDay(), q: '', lvl: '', cat: '', rows: [], raw: '' });
+    const script = String(this._config.log_script || 'script.senec_geraeteprotokoll');
+    if (!this._hass.states[script]) { L.err = `Das Skript ${script} fehlt (siehe Anleitung im README).`; this._renderLog(); return; }
+    if (L.busy) return;
+    L.busy = true; if (!quiet) { L.err = ''; this._renderLog(); }
+    try {
+      const res = await this._hass.connection.sendMessagePromise({ type: 'call_service', domain: 'script', service: script.split('.')[1],
+        service_data: { datum: L.date }, return_response: true });
+      const r = res?.response || {};
+      const text = String(r.text ?? '');
+      if (r.code && !text) throw new Error(`Speicher nicht erreichbar (Code ${r.code})`);
+      if (/<html|404 Not Found/i.test(text.slice(0, 300))) { L.rows = []; L.raw = ''; L.err = 'Für diesen Tag gibt es kein Protokoll.'; }
+      else { L.raw = text; L.rows = this._parseLog(text); L.err = ''; }
+      L.ts = Date.now();
+    } catch (err) {
+      L.err = `Laden fehlgeschlagen: ${err.message || err.code || err}`;
+    } finally { L.busy = false; this._renderLog(); }
+  }
+
+  _parseLog(raw) {
+    const out = [];
+    for (const line0 of raw.split('\n')) {
+      const line = line0.trim(); if (!line) continue;
+      let m = /^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[(\w)\|([^\]]+)\]\s*(.*)$/.exec(line);
+      if (m) { out.push({ d: m[1], t: m[2], l: m[3], c: m[4].trim(), m: m[5] }); continue; }
+      m = /^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+(.*)$/.exec(line);
+      if (m) { out.push({ d: m[1], t: m[2], l: '-', c: '', m: m[3] }); continue; }
+      if (out.length) out[out.length - 1].m += `\n${line}`; else out.push({ d: '', t: '', l: '-', c: '', m: line });
+    }
+    return out.reverse();
+  }
+
+  _renderLog() {
+    const box = this.shadowRoot.getElementById('logb');
+    if (!box) return;
+    const L = this._log || (this._log = { date: this._utcDay(), q: '', lvl: '', cat: '', rows: [], raw: '' });
+    const LV = { E: ['Fehler', 'err'], P: ['Panik', 'err'], W: ['Warnung', 'warn'], I: ['Info', 'info'], D: ['Debug', ''] };
+    const cats = [...new Set(L.rows.map((r) => r.c).filter(Boolean))].sort();
+    const q = L.q.toLowerCase();
+    const rows = L.rows.filter((r) => (!L.lvl || r.l === L.lvl) && (!L.cat || r.c === L.cat) && (!q || `${r.c} ${r.m}`.toLowerCase().includes(q)));
+    const MAX = 500;
+    const local = (r) => { if (!r.d) return ''; const d = new Date(`${r.d}T${r.t}Z`); return Number.isNaN(d) ? r.t : d.toLocaleTimeString('de-DE'); };
+    const sel = (id, opts, v) => `<select id="${id}">${opts.map(([k, t]) => `<option value="${esc(k)}" ${k === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+    morph(box, `<div class="lbar">
+        <input type="date" id="ld" value="${esc(L.date)}" max="${this._utcDay()}">
+        <button class="btn" data-act="logload">${L.busy ? 'Lädt …' : 'Laden'}</button>
+        <button class="btn ${L.live ? '' : 'sec'}" data-act="loglive" title="Lädt das heutige Protokoll jede Minute neu">${L.live ? '● Live' : 'Live'}</button>
+        <input type="search" id="lq" placeholder="Nachrichten filtern …" value="${esc(L.q)}">
+        ${sel('ll', [['', 'Alle Stufen'], ['E', 'Fehler'], ['W', 'Warnungen'], ['I', 'Info']], L.lvl)}
+        ${sel('lc', [['', 'Alle Kategorien'], ...cats.map((c) => [c, c])], L.cat)}
+        <button class="btn sec" data-act="logdl" ${L.raw ? '' : 'disabled'}>Download</button></div>
+      ${L.err ? `<div class="flow" style="margin:10px 0 0;color:var(--error-color,#db4437)">${esc(L.err)}</div>` : ''}
+      ${L.rows.length ? `<div class="ltab"><table class="log"><tr><th>Zeit</th><th>Stufe</th><th>Kategorie</th><th>Nachricht</th></tr>
+        ${rows.slice(0, MAX).map((r) => { const [lt, lc] = LV[r.l] || [r.l, '']; return `<tr class="${lc}"><td>${esc(local(r))}</td><td><span class="lv ${lc}" title="${esc(lt)}">${esc(r.l)}</span></td><td>${esc(r.c)}</td><td>${esc(r.m)}</td></tr>`; }).join('')}
+        </table></div>${rows.length > MAX ? `<div class="flow" style="margin:8px 0 0">Es werden die neuesten ${MAX} von ${rows.length} Einträgen gezeigt – Filter eingrenzen oder Download nutzen.</div>` : ''}`
+        : !L.err && !L.busy ? '<div class="flow" style="margin:10px 0 0">Tag wählen und „Laden“ antippen. Zeiten werden in Ortszeit angezeigt, das Datum ist UTC wie im Speicher.</div>' : ''}`);
+    const cnt = this.shadowRoot.getElementById('logcnt');
+    if (cnt) cnt.textContent = L.rows.length ? `${rows.length} von ${L.rows.length} Einträgen` : '';
+    if (!this._logBound) {
+      this._logBound = true;
+      box.addEventListener('change', (e) => {
+        const t = e.composedPath()[0];
+        if (t.id === 'ld') { L.date = t.value; this._loadLog(); }
+        else if (t.id === 'll') { L.lvl = t.value; this._renderLog(); }
+        else if (t.id === 'lc') { L.cat = t.value; this._renderLog(); }
+      });
+      box.addEventListener('input', (e) => { const t = e.composedPath()[0]; if (t.id === 'lq') { L.q = t.value; clearTimeout(this._lqT); this._lqT = setTimeout(() => this._renderLog(), 200); } });
+    }
+  }
+
+  _logAction(act) {
+    const L = this._log;
+    if (act === 'logload') this._loadLog();
+    else if (act === 'loglive') {
+      L.live = !L.live; clearInterval(this._liveT);
+      if (L.live) {
+        L.date = this._utcDay(); this._loadLog();
+        this._liveT = setInterval(() => { if (!this.isConnected) { clearInterval(this._liveT); return; } L.date = this._utcDay(); this._loadLog(true); }, 60000);
+      }
+      this._renderLog();
+    } else if (act === 'logdl' && L.raw) this._download(`senec-log-${L.date}.log`, L.raw, 'text/plain');
+  }
+
+  _download(name, text, type) {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  /* ---------- Statistik (Wochenansicht aus der Home-Assistant-Aufzeichnung) ---------- */
+  _statSeries() {
+    const c = this._config.statistics || {};
+    const pick = (k, ...keys) => c[k] || this._id('sensor', ...keys);
+    return [
+      { k: 'pv', n: 'PV-Erzeugung', col: '#ffb300', id: pick('pv', 'solar_generated_power') },
+      { k: 'house', n: 'Verbrauch', col: '#e53935', id: pick('house', 'house_power') },
+      { k: 'grid_import', n: 'Netzbezug', col: '#9c27b0', id: pick('grid_import', 'grid_imported_power') },
+      { k: 'grid_export', n: 'Einspeisung', col: '#00acc1', id: pick('grid_export', 'grid_exported_power') },
+      { k: 'bat_charge', n: 'Akku laden', col: '#43a047', id: pick('bat_charge', 'battery_charge_power') },
+      { k: 'bat_discharge', n: 'Akku entladen', col: '#8bc34a', id: pick('bat_discharge', 'battery_discharge_power') },
+      { k: 'soc', n: 'Akkufüllstand', col: '#90a4ae', id: pick('soc', 'battery_charge_percent'), pct: true },
+    ].filter((x) => x.id);
+  }
+
+  _weeks() {
+    // ISO-Wochen (Montag bis Sonntag), neueste zuerst
+    const out = []; const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    for (let i = 0; i < 53; i++) {
+      const mon = new Date(d); mon.setDate(d.getDate() - 7 * i);
+      const th = new Date(mon); th.setDate(mon.getDate() + 3);
+      const y = th.getFullYear(); const jan4 = new Date(y, 0, 4);
+      const kw = 1 + Math.round(((th - jan4) / 864e5 - 3 + ((jan4.getDay() + 6) % 7)) / 7);
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+      const f = (x) => `${x.getDate()}.${String(x.getMonth() + 1).padStart(2, '0')}.`;
+      out.push({ key: `${y}-${kw}`, start: mon.getTime(), label: `${y} KW${kw} (${f(mon)} – ${f(sun)})` });
+    }
+    return out;
+  }
+
+  async _loadStat() {
+    const S = this._stat;
+    const w = this._weeks().find((x) => x.key === S.week);
+    if (!w) return;
+    const series = this._statSeries();
+    S.busy = true; S.err = ''; this._renderStat();
+    const tok = (S.tok = (S.tok || 0) + 1);
+    try {
+      const end = Math.min(w.start + 7 * 864e5, Date.now());
+      const res = await this._hass.callWS({ type: 'recorder/statistics_during_period', start_time: new Date(w.start).toISOString(),
+        end_time: new Date(end).toISOString(), statistic_ids: series.map((x) => x.id), period: S.res === 'raw' ? '5minute' : 'hour', types: ['mean'] });
+      if (tok !== S.tok) return;
+      const map = new Map();
+      series.forEach((x, i) => {
+        for (const r of res[x.id] || []) {
+          const t = typeof r.start === 'number' ? r.start : Date.parse(r.start);
+          if (!map.has(t)) map.set(t, new Array(series.length).fill(null));
+          if (r.mean != null) map.get(t)[i] = r.mean;
+        }
+      });
+      S.series = series;
+      S.ts = [...map.keys()].sort((a, b) => a - b);
+      S.rows = S.ts.map((t) => map.get(t));
+      if (!S.ts.length) S.err = S.res === 'raw' ? 'Keine 5-Minuten-Werte für diese Woche (Home Assistant hält sie nur etwa 10 Tage).' : 'Für diese Woche gibt es keine aufgezeichneten Werte.';
+    } catch (err) { if (tok === S.tok) S.err = `Laden fehlgeschlagen: ${err.message || err}`; }
+    finally { if (tok === S.tok) { S.busy = false; this._renderStat(); } }
+  }
+
+  _renderStat() {
+    const box = this.shadowRoot.getElementById('statb');
+    if (!box) return;
+    const S = this._stat || (this._stat = { week: '', res: 'hourly', day: 'all', mode: 'chart', off: {}, rows: [], ts: [], series: [] });
+    const weeks = this._weeks();
+    const series = S.series.length ? S.series : this._statSeries();
+    const idx = S.ts.map((t, i) => i).filter((i) => S.day === 'all' || new Date(S.ts[i]).toDateString() === S.day);
+    const days = [...new Set(S.ts.map((t) => new Date(t).toDateString()))];
+    const vis = series.map((x, i) => i).filter((i) => !S.off[series[i].k]);
+    const fv = (x, v) => (v == null ? '–' : x.pct ? `${nf(v, 0)} %` : fW(v));
+    let body = '';
+    if (S.busy) body = '<div class="flow" style="margin:10px 0 0">Lädt …</div>';
+    else if (S.err) body = `<div class="flow" style="margin:10px 0 0">${esc(S.err)}</div>`;
+    else if (!S.week) body = '<div class="flow" style="margin:10px 0 0">Woche auswählen. Die Werte stammen aus der Aufzeichnung von Home Assistant (Stundenmittel dauerhaft, 5-Minuten-Werte etwa 10 Tage).</div>';
+    else if (idx.length) {
+      // Tagessummen (Energie aus Stundenmitteln)
+      const kwh = series.map((x, i) => (x.pct ? null : idx.reduce((s, j) => s + (S.rows[j][i] || 0) * (S.res === 'raw' ? 5 / 60 : 1), 0) / 1000));
+      body = `<div class="kv" style="margin:12px 0 6px">${series.map((x, i) => (x.pct ? '' : this._kv(x.n, `${nf(kwh[i], 1)} kWh`, '', `data-more="${esc(x.id)}"`))).join('')}</div>`;
+      body += S.mode === 'chart' ? this._statChart(series, vis, idx, S) : `<div class="ltab"><table class="log stat"><tr><th>Zeit</th>${vis.map((i) => `<th>${esc(series[i].n)}</th>`).join('')}</tr>
+        ${idx.slice().reverse().map((j) => `<tr><td>${new Date(S.ts[j]).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>${vis.map((i) => `<td>${fv(series[i], S.rows[j][i])}</td>`).join('')}</tr>`).join('')}</table></div>`;
+    }
+    morph(box, `<div class="lbar">
+        <select id="sw"><option value="">Woche auswählen</option>${weeks.map((w) => `<option value="${w.key}" ${w.key === S.week ? 'selected' : ''}>${esc(w.label)}</option>`).join('')}</select>
+        <select id="sd"><option value="all">Ganze Woche</option>${days.map((d) => `<option value="${esc(d)}" ${d === S.day ? 'selected' : ''}>${new Date(d).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' })}</option>`).join('')}</select>
+        <select id="sr"><option value="hourly" ${S.res === 'hourly' ? 'selected' : ''}>Stündlich</option><option value="raw" ${S.res === 'raw' ? 'selected' : ''}>5 Minuten</option></select>
+        <button class="btn ${S.mode === 'chart' ? '' : 'sec'}" data-act="smode" data-v="chart">Diagramm</button><button class="btn ${S.mode === 'table' ? '' : 'sec'}" data-act="smode" data-v="table">Tabelle</button>
+        <button class="btn sec" data-act="scsv" ${S.ts.length ? '' : 'disabled'}>CSV</button></div>
+      <div class="sers">${series.map((x) => `<button class="ser ${S.off[x.k] ? '' : 'on'}" data-act="sser" data-v="${x.k}" style="--c:${x.col}"><i></i>${esc(x.n)}</button>`).join('')}</div>
+      ${body}`);
+    const info = this.shadowRoot.getElementById('statinfo');
+    if (info) info.textContent = S.ts.length ? `${idx.length} Werte` : '';
+    if (!this._statBound) {
+      this._statBound = true;
+      box.addEventListener('change', (e) => {
+        const t = e.composedPath()[0];
+        if (t.id === 'sw') { S.week = t.value; S.day = 'all'; S.rows = []; S.ts = []; this._loadStat(); }
+        else if (t.id === 'sd') { S.day = t.value; this._renderStat(); }
+        else if (t.id === 'sr') { S.res = t.value; this._loadStat(); }
+      });
+      box.addEventListener('mousemove', (e) => {
+        const svg = e.composedPath().find((el) => el.tagName === 'svg');
+        if (!svg || !this._chartGeo) return;
+        const r = svg.getBoundingClientRect(); const g = this._chartGeo;
+        const x = (e.clientX - r.left) / r.width * g.w;
+        const k = Math.max(0, Math.min(g.n - 1, Math.round((x - g.l) / (g.w - g.l - g.r) * (g.n - 1))));
+        if (k !== this._hov) { this._hov = k; this._renderStat(); }
+      });
+      box.addEventListener('mouseleave', () => { if (this._hov != null) { this._hov = null; this._renderStat(); } });
+    }
+  }
+
+  _statChart(series, vis, idx, S) {
+    const W = 1000; const H = 300; const l = 46; const r = 40; const t = 10; const b = 26;
+    const n = idx.length;
+    const pw = vis.filter((i) => !series[i].pct);
+    const max = Math.max(1000, ...pw.flatMap((i) => idx.map((j) => S.rows[j][i] || 0))) * 1.08;
+    const X = (k) => l + (n < 2 ? 0 : k / (n - 1) * (W - l - r));
+    const Y = (v, pct) => t + (H - t - b) * (1 - (pct ? v / 100 : v / max));
+    this._chartGeo = { w: W, l, r, n };
+    const path = (i) => { let d = ''; let pen = false; idx.forEach((j, k) => { const v = S.rows[j][i]; if (v == null) { pen = false; return; } d += `${pen ? 'L' : 'M'}${X(k).toFixed(1)},${Y(v, series[i].pct).toFixed(1)}`; pen = true; }); return d; };
+    // Beschriftungen als HTML über dem SVG (das SVG wird in der Breite gestreckt)
+    const px = (x) => `${(x / W * 100).toFixed(2)}%`; const py = (y) => `${(y / H * 100).toFixed(2)}%`;
+    const lab = [];
+    const grid = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+      lab.push(`<span class="yl" style="left:0;width:${px(l - 6)};top:${py(Y(max * f))}">${nf(max * f / 1000, 1)}</span><span class="yr" style="left:${px(W - r + 6)};top:${py(Y(max * f))}">${Math.round(f * 100)} %</span>`);
+      return `<line x1="${l}" x2="${W - r}" y1="${Y(max * f)}" y2="${Y(max * f)}" class="gl" vector-effect="non-scaling-stroke"/>`;
+    }).join('');
+    // Tagesgrenzen
+    const marks = []; let last = '';
+    idx.forEach((j, k) => { const d = new Date(S.ts[j]); const key = d.toDateString(); if (key !== last) { last = key; marks.push(`<line x1="${X(k)}" x2="${X(k)}" y1="${t}" y2="${H - b}" class="dl" vector-effect="non-scaling-stroke"/>`); lab.push(`<span class="xl" style="left:${px(X(k) + 4)}">${d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}</span>`); } });
+    if (S.day !== 'all') { marks.length = 0; idx.forEach((j, k) => { const h = new Date(S.ts[j]); if (h.getMinutes() === 0 && h.getHours() % 3 === 0) lab.push(`<span class="xl c" style="left:${px(X(k))}">${h.getHours()} Uhr</span>`); }); lab.splice(0, lab.length, ...lab.filter((x) => !x.includes('class="xl"'))); }
+    const hov = this._hov != null && this._hov < n ? this._hov : null;
+    const tip = hov == null ? '' : `<line x1="${X(hov)}" x2="${X(hov)}" y1="${t}" y2="${H - b}" class="hl" vector-effect="non-scaling-stroke"/>`;
+    const tipBox = hov == null ? '' : `<div class="tip"><b>${new Date(S.ts[idx[hov]]).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</b>
+      ${vis.map((i) => `<span style="--c:${series[i].col}"><i></i>${esc(series[i].n)} <b>${S.rows[idx[hov]][i] == null ? '–' : series[i].pct ? `${nf(S.rows[idx[hov]][i], 0)} %` : fW(S.rows[idx[hov]][i])}</b></span>`).join('')}</div>`;
+    return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${grid}${marks.join('')}
+      ${vis.map((i) => `<path d="${path(i)}" fill="none" stroke="${series[i].col}" stroke-width="${series[i].pct ? 1.5 : 2}" ${series[i].pct ? 'stroke-dasharray="5 4"' : ''} vector-effect="non-scaling-stroke"/>`).join('')}${tip}</svg>${lab.join('')}
+      <div class="ax"><span>kW</span><span>Füllstand</span></div>${tipBox}</div>`;
+  }
+
+  _statCsv() {
+    const S = this._stat;
+    const head = ['Zeit', ...S.series.map((x) => `${x.n} [${x.pct ? '%' : 'W'}]`)].join(';');
+    const lines = S.ts.map((t, j) => [new Date(t).toLocaleString('de-DE'), ...S.rows[j].map((v) => (v == null ? '' : String(Math.round(v * 10) / 10).replace('.', ',')))].join(';'));
+    this._download(`senec-statistik-${S.week}.csv`, [head, ...lines].join('\n'), 'text/csv');
   }
 
   _tr(s) {
@@ -5917,6 +6197,10 @@ class SenecManagerCard extends HTMLElement {
     const hass = this._hass;
     try {
       if (ds.act === 'enable') await this._enableAll();
+      else if (ds.act.startsWith('log')) this._logAction(ds.act);
+      else if (ds.act === 'smode') { this._stat.mode = ds.v; this._renderStat(); }
+      else if (ds.act === 'sser') { this._stat.off[ds.v] = !this._stat.off[ds.v]; this._renderStat(); }
+      else if (ds.act === 'scsv') this._statCsv();
       else if (ds.act === 'tog') {
         const on = ds.on === '1';
         if (this._config.confirm && !window.confirm(`${ds.n} ${on ? 'ausschalten' : 'einschalten'}?`)) return;
@@ -8232,7 +8516,7 @@ if (!customElements.get('xsense-manager-card')) {
  *   links:                       # optional, zusätzliche Kacheln mit Verlinkung
  *     - { name: Frigate, icon: mdi:cctv, path: /dashboard-frigate, color: '#e53935' }
  */
-const VERSION = '1.3.1';
+const VERSION = '1.3.2';
 const EVT = 'area-overview-card-area';
 const STORE = 'area-overview-card.area';
 const BAD = ['unavailable', 'unknown'];
@@ -8654,17 +8938,12 @@ class AreaOverviewCard extends HTMLElement {
     if (hums.length) sum.push(`<span data-more="${hums[0].entity_id}"><ha-icon icon="mdi:water-percent"></ha-icon>${Math.round(avg(hums))} %</span>`);
     const pwh = this._powerEntity(area);
     if (pwh) sum.push(`<span data-more="${pwh.entity_id}"><ha-icon icon="mdi:flash"></ha-icon>${esc(this._fmtPower(pwh))}</span>`);
-    // ein Kamera-Button je Kamera des Bereichs (konfigurierte und zugeordnete), öffnet das Kamera-Popup
-    const cams = [...new Set([(this._config.cameras || {})[area.area_id], ...areaEnts.filter((e) => e.entity_id.startsWith('camera.')).map((e) => e.entity_id)])]
-      .filter((id) => id && hass.states[id]);
-    for (const id of cams) {
-      let nm = 'Kamera';
-      if (cams.length > 1) {
-        const fn = String(hass.states[id].attributes.friendly_name || id);
-        nm = fn.toLowerCase().startsWith(area.name.toLowerCase() + ' ') ? fn.slice(area.name.length + 1) : fn;
-      }
-      sum.push(`<span data-more="${esc(id)}" title="${esc(hass.states[id].attributes.friendly_name || id)}"><ha-icon icon="mdi:cctv"></ha-icon>${esc(nm)}</span>`);
-    }
+    // ein Kamera-Button für alle Kameras des Bereichs (konfigurierte und zugeordnete, auch ausgeblendete)
+    const cams = [...new Set([(this._config.cameras || {})[area.area_id], ...Object.values(hass.entities || {})
+      .filter((e) => e.entity_id.startsWith('camera.') && (e.area_id || (e.device_id && hass.devices[e.device_id]?.area_id)) === area.area_id)
+      .map((e) => e.entity_id)])].filter((id) => id && hass.states[id]);
+    if (cams.length === 1) sum.push(`<span data-more="${esc(cams[0])}"><ha-icon icon="mdi:cctv"></ha-icon>Kamera</span>`);
+    else if (cams.length) sum.push(`<span data-act="cams" data-ids="${esc(cams.join(','))}" data-n="${esc(area.name)}"><ha-icon icon="mdi:cctv"></ha-icon>${cams.length} Kameras</span>`);
     if (lights.length) sum.push(`<span data-more="${(lightsOn[0] || lights[0]).entity_id}"><ha-icon icon="${lightsOn.length ? 'mdi:lightbulb-on' : 'mdi:lightbulb-outline'}"></ha-icon>${lightsOn.length ? `${lightsOn.length} an` : 'aus'}</span>`);
     const nHidden = [...data.devices].filter((id) => HIDE.ids.has(id)).length + data.loose.filter((e) => HIDE.ents.has(e.entity_id)).length;
     if (nHidden || this._showHidden) {
@@ -8942,6 +9221,14 @@ class AreaOverviewCard extends HTMLElement {
   _onClick(e) {
     const path = e.composedPath();
     const btn = path.find((el) => el.dataset && el.dataset.act);
+    if (btn && btn.dataset.act === 'cams') {
+      e.stopPropagation();
+      // Startseite zeigt alle Kameras im Popup; ohne Startseite das Dialogfenster der ersten Kamera
+      const detail = { ids: btn.dataset.ids.split(','), title: btn.dataset.n, handled: false };
+      this.dispatchEvent(new CustomEvent('hmc-cameras', { detail, bubbles: true, composed: true }));
+      if (!detail.handled) this._fire('hass-more-info', { entityId: detail.ids[0] });
+      return;
+    }
     if (btn) {
       e.stopPropagation();
       if (btn.disabled) return;
@@ -9246,7 +9533,7 @@ if (!customElements.get('home-summary-card')) {
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  */
 {
-const VERSION = '2.1.3';
+const VERSION = '2.2.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -9468,6 +9755,7 @@ const STYLE = `
   .rc .pw small { display:block; font-size:11px; font-weight:400; text-align:right; opacity:.7; }
   .icons { display:flex; gap:6px; flex-wrap:wrap; }
   .ic { display:inline-flex; align-items:center; gap:4px; padding: 4px 8px; border-radius: 10px; font-size:13px; font-weight:600;
+  .ic.cam { cursor:pointer; } .ic.cam:hover { filter: brightness(1.25); outline: 1px solid color-mix(in srgb, var(--c) 50%, transparent); }
     color: var(--secondary-text-color); background: color-mix(in srgb, var(--secondary-text-color) 14%, var(--ha-card-background, var(--card-background-color))); }
   .ic ha-icon { --mdc-icon-size:18px; }
   .ic.on { color: var(--c); background: color-mix(in srgb, var(--c) 20%, var(--ha-card-background, var(--card-background-color))); }
@@ -9554,13 +9842,14 @@ class HomeDashboardCard extends HTMLElement {
     HIDE.subs.add(this._onHide);
   }
 
-  disconnectedCallback() { clearInterval(this._tick); HIDE.subs.delete(this._onHide); this._closePopup(); }
+  disconnectedCallback() { clearInterval(this._tick); HIDE.subs.delete(this._onHide); this._closePopup(); this._closeCams(); }
 
   set hass(hass) {
     this._hass = hass;
     HIDE.sync(hass);
     this._render();
     if (this._pop) this._updatePopup();
+    if (this._camPop) for (const c of this._camPop.els) c.hass = hass;
     if (!this._histTs) this._fetchHist();
     if (!this._fcTs) this._fetchForecast();
     if (!this._logTs) this._fetchLog();
@@ -10014,10 +10303,62 @@ class HomeDashboardCard extends HTMLElement {
     if (media.length) { const n = media.filter((s) => s.state === 'playing').length; ic(n ? 'mdi:play-circle' : 'mdi:speaker', '#2196f3', n, n > 0, n ? 'Wiedergabe' : 'Medien'); }
     const open = sts.filter((s) => s.entity_id.startsWith('binary_sensor.') && OPEN_DC.includes(s.attributes.device_class));
     if (open.some((s) => s.state === 'on')) { const n = open.filter((s) => s.state === 'on').length; ic('mdi:window-open-variant', '#2196f3', n, true, `${n} offen`); }
-    const camId = this._config.cameras[a.area_id];
-    const cams = camId ? [hass.states[camId]].filter(Boolean) : of('camera');
-    if (cams.length) ic('mdi:cctv', '#009688', cams.length > 1 ? cams.length : 0, cams.some((s) => !BAD.includes(s.state)), 'Kamera');
+    const cams = this._areaCams(a.area_id).map((id) => hass.states[id]);
+    if (cams.length) {
+      out.push(`<span class="ic cam ${cams.some((s) => !BAD.includes(s.state)) ? 'on' : ''}" style="--c:#009688" data-cams="${esc(a.area_id)}"
+        title="${cams.length > 1 ? `${cams.length} Kameras` : 'Kamera'}"><ha-icon icon="mdi:cctv"></ha-icon>${cams.length > 1 ? cams.length : ''}</span>`);
+    }
     return out.join('');
+  }
+
+  /** alle Kameras eines Bereichs: konfigurierte zuerst, dann zugeordnete (auch ausgeblendete) */
+  _areaCams(areaId) {
+    const hass = this._hass;
+    const ids = Object.values(hass.entities || {})
+      .filter((e) => e.entity_id.startsWith('camera.') && (e.area_id || (e.device_id && hass.devices[e.device_id]?.area_id)) === areaId)
+      .map((e) => e.entity_id).sort();
+    return [...new Set([this._config.cameras[areaId], ...ids])].filter((id) => id && hass.states[id]);
+  }
+
+  /** Kamera-Popup über allem (auch über dem Raum-Popup) */
+  async _openCams(ids, title) {
+    this._closeCams();
+    const host = document.createElement('div');
+    host.attachShadow({ mode: 'open' }).innerHTML = `<style>${POP_CSS}
+      .bg { z-index:101; } .cg { display:grid; gap:12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); }</style>
+      <div class="bg"><div class="pop" style="--w:${ids.length > 1 ? 1280 : 900}px; --c:#009688">
+      <div class="ph"><div class="bub"><ha-icon icon="mdi:cctv"></ha-icon></div><div class="t">${esc(title || 'Kameras')}<small>${ids.length} Kamera${ids.length === 1 ? '' : 's'} · Bild antippen für Livebild</small></div>
+      <button class="x" data-x title="Schließen"><ha-icon icon="mdi:close"></ha-icon></button></div><div class="pb"><div class="cg"></div></div></div></div>`;
+    const r = host.shadowRoot;
+    const cp = this._camPop = { host, els: [] };
+    for (const type of ['hass-more-info', 'show-dialog']) {
+      host.addEventListener(type, (e) => {
+        if (e.__hd) return;
+        e.stopPropagation();
+        const ev = new CustomEvent(type, { detail: e.detail, bubbles: true, composed: true }); ev.__hd = true;
+        this.dispatchEvent(ev);
+      });
+    }
+    r.querySelector('.bg').addEventListener('click', (e) => {
+      if (e.target.classList.contains('bg') || e.composedPath().some((el) => el.dataset && el.dataset.x != null)) this._closeCams();
+    });
+    this._camEsc = (e) => { if (e.key === 'Escape' && this._camPop) { e.stopImmediatePropagation(); this._closeCams(); } };
+    window.addEventListener('keydown', this._camEsc, true);
+    document.body.appendChild(host);
+    const grid = r.querySelector('.cg');
+    for (const id of ids) {
+      const slot = document.createElement('div'); grid.appendChild(slot);
+      this._card({ type: 'picture-entity', entity: id, show_state: false, camera_view: 'auto', tap_action: { action: 'more-info' } })
+        .then((c) => { if (this._camPop !== cp) return; c.hass = this._hass; cp.els.push(c); slot.appendChild(c); })
+        .catch((err) => console.warn('home-dashboard-card:', err));
+    }
+  }
+
+  _closeCams() {
+    if (!this._camPop) return;
+    this._camPop.host.remove();
+    window.removeEventListener('keydown', this._camEsc, true);
+    this._camPop = null;
   }
 
   _renderRooms() {
@@ -10083,6 +10424,8 @@ class HomeDashboardCard extends HTMLElement {
       if (l?.popup) this._openPopup(l.popup); else if (l?.path) this._navigate(l.path);
       return;
     }
+    const cam = path.find((el) => el.dataset && el.dataset.cams);
+    if (cam) { e.stopPropagation(); this._openCams(this._areaCams(cam.dataset.cams), this._hass.areas[cam.dataset.cams]?.name); return; }
     const pop = path.find((el) => el.dataset && el.dataset.pop);
     if (pop) this._openPopup(pop.dataset.pop);
   }
@@ -10128,6 +10471,7 @@ class HomeDashboardCard extends HTMLElement {
     const r = host.shadowRoot;
     this._pop = { key, host, r, els: [], html: null };
     // Ereignisse aus dem Popup (liegt an <body>) an Home Assistant weiterreichen
+    host.addEventListener('hmc-cameras', (e) => { e.detail.handled = true; e.stopPropagation(); this._openCams(e.detail.ids, e.detail.title); });
     for (const type of ['hass-more-info', 'hass-notification', 'show-dialog']) {
       host.addEventListener(type, (e) => {
         if (e.__hd) return;
@@ -10325,4 +10669,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.2.0 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.3.0 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');

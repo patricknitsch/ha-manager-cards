@@ -17,7 +17,7 @@
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  */
 {
-const VERSION = '2.1.3';
+const VERSION = '2.2.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -239,6 +239,7 @@ const STYLE = `
   .rc .pw small { display:block; font-size:11px; font-weight:400; text-align:right; opacity:.7; }
   .icons { display:flex; gap:6px; flex-wrap:wrap; }
   .ic { display:inline-flex; align-items:center; gap:4px; padding: 4px 8px; border-radius: 10px; font-size:13px; font-weight:600;
+  .ic.cam { cursor:pointer; } .ic.cam:hover { filter: brightness(1.25); outline: 1px solid color-mix(in srgb, var(--c) 50%, transparent); }
     color: var(--secondary-text-color); background: color-mix(in srgb, var(--secondary-text-color) 14%, var(--ha-card-background, var(--card-background-color))); }
   .ic ha-icon { --mdc-icon-size:18px; }
   .ic.on { color: var(--c); background: color-mix(in srgb, var(--c) 20%, var(--ha-card-background, var(--card-background-color))); }
@@ -325,13 +326,14 @@ class HomeDashboardCard extends HTMLElement {
     HIDE.subs.add(this._onHide);
   }
 
-  disconnectedCallback() { clearInterval(this._tick); HIDE.subs.delete(this._onHide); this._closePopup(); }
+  disconnectedCallback() { clearInterval(this._tick); HIDE.subs.delete(this._onHide); this._closePopup(); this._closeCams(); }
 
   set hass(hass) {
     this._hass = hass;
     HIDE.sync(hass);
     this._render();
     if (this._pop) this._updatePopup();
+    if (this._camPop) for (const c of this._camPop.els) c.hass = hass;
     if (!this._histTs) this._fetchHist();
     if (!this._fcTs) this._fetchForecast();
     if (!this._logTs) this._fetchLog();
@@ -785,10 +787,62 @@ class HomeDashboardCard extends HTMLElement {
     if (media.length) { const n = media.filter((s) => s.state === 'playing').length; ic(n ? 'mdi:play-circle' : 'mdi:speaker', '#2196f3', n, n > 0, n ? 'Wiedergabe' : 'Medien'); }
     const open = sts.filter((s) => s.entity_id.startsWith('binary_sensor.') && OPEN_DC.includes(s.attributes.device_class));
     if (open.some((s) => s.state === 'on')) { const n = open.filter((s) => s.state === 'on').length; ic('mdi:window-open-variant', '#2196f3', n, true, `${n} offen`); }
-    const camId = this._config.cameras[a.area_id];
-    const cams = camId ? [hass.states[camId]].filter(Boolean) : of('camera');
-    if (cams.length) ic('mdi:cctv', '#009688', cams.length > 1 ? cams.length : 0, cams.some((s) => !BAD.includes(s.state)), 'Kamera');
+    const cams = this._areaCams(a.area_id).map((id) => hass.states[id]);
+    if (cams.length) {
+      out.push(`<span class="ic cam ${cams.some((s) => !BAD.includes(s.state)) ? 'on' : ''}" style="--c:#009688" data-cams="${esc(a.area_id)}"
+        title="${cams.length > 1 ? `${cams.length} Kameras` : 'Kamera'}"><ha-icon icon="mdi:cctv"></ha-icon>${cams.length > 1 ? cams.length : ''}</span>`);
+    }
     return out.join('');
+  }
+
+  /** alle Kameras eines Bereichs: konfigurierte zuerst, dann zugeordnete (auch ausgeblendete) */
+  _areaCams(areaId) {
+    const hass = this._hass;
+    const ids = Object.values(hass.entities || {})
+      .filter((e) => e.entity_id.startsWith('camera.') && (e.area_id || (e.device_id && hass.devices[e.device_id]?.area_id)) === areaId)
+      .map((e) => e.entity_id).sort();
+    return [...new Set([this._config.cameras[areaId], ...ids])].filter((id) => id && hass.states[id]);
+  }
+
+  /** Kamera-Popup über allem (auch über dem Raum-Popup) */
+  async _openCams(ids, title) {
+    this._closeCams();
+    const host = document.createElement('div');
+    host.attachShadow({ mode: 'open' }).innerHTML = `<style>${POP_CSS}
+      .bg { z-index:101; } .cg { display:grid; gap:12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); }</style>
+      <div class="bg"><div class="pop" style="--w:${ids.length > 1 ? 1280 : 900}px; --c:#009688">
+      <div class="ph"><div class="bub"><ha-icon icon="mdi:cctv"></ha-icon></div><div class="t">${esc(title || 'Kameras')}<small>${ids.length} Kamera${ids.length === 1 ? '' : 's'} · Bild antippen für Livebild</small></div>
+      <button class="x" data-x title="Schließen"><ha-icon icon="mdi:close"></ha-icon></button></div><div class="pb"><div class="cg"></div></div></div></div>`;
+    const r = host.shadowRoot;
+    const cp = this._camPop = { host, els: [] };
+    for (const type of ['hass-more-info', 'show-dialog']) {
+      host.addEventListener(type, (e) => {
+        if (e.__hd) return;
+        e.stopPropagation();
+        const ev = new CustomEvent(type, { detail: e.detail, bubbles: true, composed: true }); ev.__hd = true;
+        this.dispatchEvent(ev);
+      });
+    }
+    r.querySelector('.bg').addEventListener('click', (e) => {
+      if (e.target.classList.contains('bg') || e.composedPath().some((el) => el.dataset && el.dataset.x != null)) this._closeCams();
+    });
+    this._camEsc = (e) => { if (e.key === 'Escape' && this._camPop) { e.stopImmediatePropagation(); this._closeCams(); } };
+    window.addEventListener('keydown', this._camEsc, true);
+    document.body.appendChild(host);
+    const grid = r.querySelector('.cg');
+    for (const id of ids) {
+      const slot = document.createElement('div'); grid.appendChild(slot);
+      this._card({ type: 'picture-entity', entity: id, show_state: false, camera_view: 'auto', tap_action: { action: 'more-info' } })
+        .then((c) => { if (this._camPop !== cp) return; c.hass = this._hass; cp.els.push(c); slot.appendChild(c); })
+        .catch((err) => console.warn('home-dashboard-card:', err));
+    }
+  }
+
+  _closeCams() {
+    if (!this._camPop) return;
+    this._camPop.host.remove();
+    window.removeEventListener('keydown', this._camEsc, true);
+    this._camPop = null;
   }
 
   _renderRooms() {
@@ -854,6 +908,8 @@ class HomeDashboardCard extends HTMLElement {
       if (l?.popup) this._openPopup(l.popup); else if (l?.path) this._navigate(l.path);
       return;
     }
+    const cam = path.find((el) => el.dataset && el.dataset.cams);
+    if (cam) { e.stopPropagation(); this._openCams(this._areaCams(cam.dataset.cams), this._hass.areas[cam.dataset.cams]?.name); return; }
     const pop = path.find((el) => el.dataset && el.dataset.pop);
     if (pop) this._openPopup(pop.dataset.pop);
   }
@@ -899,6 +955,7 @@ class HomeDashboardCard extends HTMLElement {
     const r = host.shadowRoot;
     this._pop = { key, host, r, els: [], html: null };
     // Ereignisse aus dem Popup (liegt an <body>) an Home Assistant weiterreichen
+    host.addEventListener('hmc-cameras', (e) => { e.detail.handled = true; e.stopPropagation(); this._openCams(e.detail.ids, e.detail.title); });
     for (const type of ['hass-more-info', 'hass-notification', 'show-dialog']) {
       host.addEventListener(type, (e) => {
         if (e.__hd) return;

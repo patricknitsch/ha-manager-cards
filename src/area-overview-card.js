@@ -26,7 +26,7 @@
  *   links:                       # optional, zusätzliche Kacheln mit Verlinkung
  *     - { name: Frigate, icon: mdi:cctv, path: /dashboard-frigate, color: '#e53935' }
  */
-const VERSION = '1.3.1';
+const VERSION = '1.3.2';
 const EVT = 'area-overview-card-area';
 const STORE = 'area-overview-card.area';
 const BAD = ['unavailable', 'unknown'];
@@ -448,17 +448,12 @@ class AreaOverviewCard extends HTMLElement {
     if (hums.length) sum.push(`<span data-more="${hums[0].entity_id}"><ha-icon icon="mdi:water-percent"></ha-icon>${Math.round(avg(hums))} %</span>`);
     const pwh = this._powerEntity(area);
     if (pwh) sum.push(`<span data-more="${pwh.entity_id}"><ha-icon icon="mdi:flash"></ha-icon>${esc(this._fmtPower(pwh))}</span>`);
-    // ein Kamera-Button je Kamera des Bereichs (konfigurierte und zugeordnete), öffnet das Kamera-Popup
-    const cams = [...new Set([(this._config.cameras || {})[area.area_id], ...areaEnts.filter((e) => e.entity_id.startsWith('camera.')).map((e) => e.entity_id)])]
-      .filter((id) => id && hass.states[id]);
-    for (const id of cams) {
-      let nm = 'Kamera';
-      if (cams.length > 1) {
-        const fn = String(hass.states[id].attributes.friendly_name || id);
-        nm = fn.toLowerCase().startsWith(area.name.toLowerCase() + ' ') ? fn.slice(area.name.length + 1) : fn;
-      }
-      sum.push(`<span data-more="${esc(id)}" title="${esc(hass.states[id].attributes.friendly_name || id)}"><ha-icon icon="mdi:cctv"></ha-icon>${esc(nm)}</span>`);
-    }
+    // ein Kamera-Button für alle Kameras des Bereichs (konfigurierte und zugeordnete, auch ausgeblendete)
+    const cams = [...new Set([(this._config.cameras || {})[area.area_id], ...Object.values(hass.entities || {})
+      .filter((e) => e.entity_id.startsWith('camera.') && (e.area_id || (e.device_id && hass.devices[e.device_id]?.area_id)) === area.area_id)
+      .map((e) => e.entity_id)])].filter((id) => id && hass.states[id]);
+    if (cams.length === 1) sum.push(`<span data-more="${esc(cams[0])}"><ha-icon icon="mdi:cctv"></ha-icon>Kamera</span>`);
+    else if (cams.length) sum.push(`<span data-act="cams" data-ids="${esc(cams.join(','))}" data-n="${esc(area.name)}"><ha-icon icon="mdi:cctv"></ha-icon>${cams.length} Kameras</span>`);
     if (lights.length) sum.push(`<span data-more="${(lightsOn[0] || lights[0]).entity_id}"><ha-icon icon="${lightsOn.length ? 'mdi:lightbulb-on' : 'mdi:lightbulb-outline'}"></ha-icon>${lightsOn.length ? `${lightsOn.length} an` : 'aus'}</span>`);
     const nHidden = [...data.devices].filter((id) => HIDE.ids.has(id)).length + data.loose.filter((e) => HIDE.ents.has(e.entity_id)).length;
     if (nHidden || this._showHidden) {
@@ -736,6 +731,14 @@ class AreaOverviewCard extends HTMLElement {
   _onClick(e) {
     const path = e.composedPath();
     const btn = path.find((el) => el.dataset && el.dataset.act);
+    if (btn && btn.dataset.act === 'cams') {
+      e.stopPropagation();
+      // Startseite zeigt alle Kameras im Popup; ohne Startseite das Dialogfenster der ersten Kamera
+      const detail = { ids: btn.dataset.ids.split(','), title: btn.dataset.n, handled: false };
+      this.dispatchEvent(new CustomEvent('hmc-cameras', { detail, bubbles: true, composed: true }));
+      if (!detail.handled) this._fire('hass-more-info', { entityId: detail.ids[0] });
+      return;
+    }
     if (btn) {
       e.stopPropagation();
       if (btn.disabled) return;

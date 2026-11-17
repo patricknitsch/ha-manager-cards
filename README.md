@@ -71,3 +71,29 @@ Detailsensoren, die die Integration deaktiviert ausliefert, lassen sich in der K
 type: custom:senec-manager-card
 capacity: 10      # optional, nutzbare Kapazität in kWh (sonst aus dem Modellcode)
 ```
+
+### Geräteprotokoll und Statistik
+
+**Geräteprotokoll:** Das Tagesprotokoll liegt lokal auf dem Speicher (`https://<IP>/log/JJJJ/MM/TT.log`, selbstsigniertes Zertifikat).
+Der Browser kann es nicht direkt abrufen, deshalb holt Home Assistant es über einen `shell_command` und ein Skript mit Antwort:
+
+```yaml
+# packages/energie/senec_protokoll.yaml (Neustart nötig)
+shell_command:
+  senec_geraeteprotokoll: >-
+    curl -sk --max-time 20 https://192.168.30.6//log/{{ datum[0:4] | int }}/{{ '%02d' | format(datum[5:7] | int) }}/{{ '%02d' | format(datum[8:10] | int) }}.log
+```
+
+```yaml
+# Skript script.senec_geraeteprotokoll (Feld „datum“, Antwort {text, code})
+sequence:
+  - action: shell_command.senec_geraeteprotokoll
+    data: { datum: "{{ datum }}" }
+    response_variable: antwort
+  - variables: { ergebnis: "{{ {'text': antwort.stdout, 'code': antwort.returncode} }}" }
+  - stop: Protokoll geladen
+    response_variable: ergebnis
+```
+
+**Statistik:** Wochenansicht (Diagramm, Tabelle, CSV) aus der Aufzeichnung von Home Assistant – Stundenmittel dauerhaft,
+5-Minuten-Werte etwa 10 Tage. Die Wochen-CSV von mein-senec.de braucht eine Portal-Anmeldung und ist nicht eingebunden.
