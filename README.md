@@ -72,7 +72,7 @@ type: custom:senec-manager-card
 capacity: 10      # optional, nutzbare Kapazität in kWh (sonst aus dem Modellcode)
 ```
 
-### Geräteprotokoll und Statistik
+### Geräteprotokoll
 
 **Geräteprotokoll:** Das Tagesprotokoll liegt lokal auf dem Speicher (`https://<IP>/log/JJJJ/MM/TT.log`, selbstsigniertes Zertifikat).
 Der Browser kann es nicht direkt abrufen, deshalb holt Home Assistant es über einen `shell_command` und ein Skript mit Antwort:
@@ -95,5 +95,3 @@ sequence:
     response_variable: ergebnis
 ```
 
-**Statistik:** Wochenansicht (Diagramm, Tabelle, CSV) aus der Aufzeichnung von Home Assistant – Stundenmittel dauerhaft,
-5-Minuten-Werte etwa 10 Tage. Die Wochen-CSV von mein-senec.de braucht eine Portal-Anmeldung und ist nicht eingebunden.

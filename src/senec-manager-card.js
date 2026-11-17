@@ -13,17 +13,9 @@
  *   min_width: 400             # Mindestbreite einer Kachel in px
  *   confirm: true              # Rückfrage vor Schaltvorgängen
  *   log_script: script.senec_geraeteprotokoll   # Skript, das das Tagesprotokoll des Speichers liefert (Antwort {text, code})
- *   statistics:                # Leistungs-Sensoren für die Wochenstatistik (Standard: SENEC-Sensoren)
- *     pv: sensor.x
- *     house: sensor.x
- *     grid_import: sensor.x
- *     grid_export: sensor.x
- *     bat_charge: sensor.x
- *     bat_discharge: sensor.x
- *     soc: sensor.x
  */
 {
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const BAD = ['unavailable', 'unknown', ''];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const nf = (v, d = 1) => Number(v).toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -161,24 +153,8 @@ const STYLE = `
   table.log td:first-child { white-space:nowrap; color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
   table.log td:last-child { font-family: var(--code-font-family, monospace); font-size:12px; white-space:pre-wrap; word-break:break-word; }
   table.log tr.err td { background: rgba(219,68,55,.10); } table.log tr.warn td { background: rgba(255,166,0,.10); }
-  table.stat td, table.stat th { text-align:right; } table.stat td:first-child, table.stat th:first-child { text-align:left; }
-  table.stat td:last-child { font-family:inherit; font-size:13px; }
   .lv { display:inline-block; min-width:20px; text-align:center; font-weight:700; border-radius:5px; padding:0 4px; color: var(--secondary-text-color); }
   .lv.err { color: var(--error-color, #db4437); } .lv.warn { color: var(--warning-color, #ffa600); } .lv.info { color:#03a9f4; }
-  .sers { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
-  .ser { display:inline-flex; align-items:center; gap:6px; font: inherit; font-size:12px; padding:4px 10px; border-radius:14px; cursor:pointer;
-    border:1px solid var(--divider-color); background:none; color: var(--secondary-text-color); }
-  .ser i { width:10px; height:10px; border-radius:50%; border:2px solid var(--c); }
-  .ser.on { color: var(--primary-text-color); background: color-mix(in srgb, var(--c) 12%, transparent); } .ser.on i { background: var(--c); }
-  .chart { position:relative; margin-top:6px; }
-  .chart svg { width:100%; height:300px; display:block; overflow:visible; }
-  .chart .yl, .chart .yr, .chart .xl { position:absolute; font-size:11px; color: var(--secondary-text-color); transform: translateY(-50%); pointer-events:none; white-space:nowrap; }
-  .chart .yl { text-align:right; } .chart .xl { top: calc(300px - 13px); } .chart .xl.c { transform: translate(-50%, -50%); }
-  .chart .gl { stroke: var(--divider-color); } .chart .dl { stroke: var(--divider-color); stroke-dasharray:3 3; } .chart .hl { stroke: var(--primary-text-color); opacity:.5; }
-  .chart .ax { display:flex; justify-content:space-between; font-size:11px; color: var(--secondary-text-color); margin-top:-2px; }
-  .tip { position:absolute; top:8px; left:56px; background: var(--card-background-color); border:1px solid var(--divider-color); border-radius:10px; padding:8px 10px;
-    font-size:12px; display:flex; flex-direction:column; gap:2px; pointer-events:none; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
-  .tip span { display:flex; align-items:center; gap:6px; } .tip span b { margin-left:auto; padding-left:12px; } .tip i { width:8px; height:8px; border-radius:50%; background: var(--c); }
   [hidden] { display:none !important; }
 `;
 
@@ -322,10 +298,8 @@ class SenecManagerCard extends HTMLElement {
     P.push(this._pFunctions());
     P.push(this._pControl());
     P.push(`<div class="p wide" data-k="log" style="--c:#546e7a"><h3><ha-icon icon="mdi:text-box-search-outline"></ha-icon>Geräteprotokoll<small id="logcnt"></small></h3><div id="logb" data-keep></div></div>`);
-    P.push(`<div class="p wide" data-k="stat" style="--c:#2196f3"><h3><ha-icon icon="mdi:chart-timeline-variant"></ha-icon>Statistik<small id="statinfo"></small></h3><div id="statb" data-keep></div></div>`);
     morph(root.getElementById('grid'), P.filter(Boolean).join(''));
     if (!this._logInit) { this._logInit = true; this._renderLog(); }
-    if (!this._statInit) { this._statInit = true; this._renderStat(); }
   }
 
   /* ---------- Geräteprotokoll (Tageslog des Speichers, über ein Skript mit Antwort) ---------- */
@@ -421,150 +395,6 @@ class SenecManagerCard extends HTMLElement {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  /* ---------- Statistik (Wochenansicht aus der Home-Assistant-Aufzeichnung) ---------- */
-  _statSeries() {
-    const c = this._config.statistics || {};
-    const pick = (k, ...keys) => c[k] || this._id('sensor', ...keys);
-    return [
-      { k: 'pv', n: 'PV-Erzeugung', col: '#ffb300', id: pick('pv', 'solar_generated_power') },
-      { k: 'house', n: 'Verbrauch', col: '#e53935', id: pick('house', 'house_power') },
-      { k: 'grid_import', n: 'Netzbezug', col: '#9c27b0', id: pick('grid_import', 'grid_imported_power') },
-      { k: 'grid_export', n: 'Einspeisung', col: '#00acc1', id: pick('grid_export', 'grid_exported_power') },
-      { k: 'bat_charge', n: 'Akku laden', col: '#43a047', id: pick('bat_charge', 'battery_charge_power') },
-      { k: 'bat_discharge', n: 'Akku entladen', col: '#8bc34a', id: pick('bat_discharge', 'battery_discharge_power') },
-      { k: 'soc', n: 'Akkufüllstand', col: '#90a4ae', id: pick('soc', 'battery_charge_percent'), pct: true },
-    ].filter((x) => x.id);
-  }
-
-  _weeks() {
-    // ISO-Wochen (Montag bis Sonntag), neueste zuerst
-    const out = []; const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-    for (let i = 0; i < 53; i++) {
-      const mon = new Date(d); mon.setDate(d.getDate() - 7 * i);
-      const th = new Date(mon); th.setDate(mon.getDate() + 3);
-      const y = th.getFullYear(); const jan4 = new Date(y, 0, 4);
-      const kw = 1 + Math.round(((th - jan4) / 864e5 - 3 + ((jan4.getDay() + 6) % 7)) / 7);
-      const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-      const f = (x) => `${x.getDate()}.${String(x.getMonth() + 1).padStart(2, '0')}.`;
-      out.push({ key: `${y}-${kw}`, start: mon.getTime(), label: `${y} KW${kw} (${f(mon)} – ${f(sun)})` });
-    }
-    return out;
-  }
-
-  async _loadStat() {
-    const S = this._stat;
-    const w = this._weeks().find((x) => x.key === S.week);
-    if (!w) return;
-    const series = this._statSeries();
-    S.busy = true; S.err = ''; this._renderStat();
-    const tok = (S.tok = (S.tok || 0) + 1);
-    try {
-      const end = Math.min(w.start + 7 * 864e5, Date.now());
-      const res = await this._hass.callWS({ type: 'recorder/statistics_during_period', start_time: new Date(w.start).toISOString(),
-        end_time: new Date(end).toISOString(), statistic_ids: series.map((x) => x.id), period: S.res === 'raw' ? '5minute' : 'hour', types: ['mean'] });
-      if (tok !== S.tok) return;
-      const map = new Map();
-      series.forEach((x, i) => {
-        for (const r of res[x.id] || []) {
-          const t = typeof r.start === 'number' ? r.start : Date.parse(r.start);
-          if (!map.has(t)) map.set(t, new Array(series.length).fill(null));
-          if (r.mean != null) map.get(t)[i] = r.mean;
-        }
-      });
-      S.series = series;
-      S.ts = [...map.keys()].sort((a, b) => a - b);
-      S.rows = S.ts.map((t) => map.get(t));
-      if (!S.ts.length) S.err = S.res === 'raw' ? 'Keine 5-Minuten-Werte für diese Woche (Home Assistant hält sie nur etwa 10 Tage).' : 'Für diese Woche gibt es keine aufgezeichneten Werte.';
-    } catch (err) { if (tok === S.tok) S.err = `Laden fehlgeschlagen: ${err.message || err}`; }
-    finally { if (tok === S.tok) { S.busy = false; this._renderStat(); } }
-  }
-
-  _renderStat() {
-    const box = this.shadowRoot.getElementById('statb');
-    if (!box) return;
-    const S = this._stat || (this._stat = { week: '', res: 'hourly', day: 'all', mode: 'chart', off: {}, rows: [], ts: [], series: [] });
-    const weeks = this._weeks();
-    const series = S.series.length ? S.series : this._statSeries();
-    const idx = S.ts.map((t, i) => i).filter((i) => S.day === 'all' || new Date(S.ts[i]).toDateString() === S.day);
-    const days = [...new Set(S.ts.map((t) => new Date(t).toDateString()))];
-    const vis = series.map((x, i) => i).filter((i) => !S.off[series[i].k]);
-    const fv = (x, v) => (v == null ? '–' : x.pct ? `${nf(v, 0)} %` : fW(v));
-    let body = '';
-    if (S.busy) body = '<div class="flow" style="margin:10px 0 0">Lädt …</div>';
-    else if (S.err) body = `<div class="flow" style="margin:10px 0 0">${esc(S.err)}</div>`;
-    else if (!S.week) body = '<div class="flow" style="margin:10px 0 0">Woche auswählen. Die Werte stammen aus der Aufzeichnung von Home Assistant (Stundenmittel dauerhaft, 5-Minuten-Werte etwa 10 Tage).</div>';
-    else if (idx.length) {
-      // Tagessummen (Energie aus Stundenmitteln)
-      const kwh = series.map((x, i) => (x.pct ? null : idx.reduce((s, j) => s + (S.rows[j][i] || 0) * (S.res === 'raw' ? 5 / 60 : 1), 0) / 1000));
-      body = `<div class="kv" style="margin:12px 0 6px">${series.map((x, i) => (x.pct ? '' : this._kv(x.n, `${nf(kwh[i], 1)} kWh`, '', `data-more="${esc(x.id)}"`))).join('')}</div>`;
-      body += S.mode === 'chart' ? this._statChart(series, vis, idx, S) : `<div class="ltab"><table class="log stat"><tr><th>Zeit</th>${vis.map((i) => `<th>${esc(series[i].n)}</th>`).join('')}</tr>
-        ${idx.slice().reverse().map((j) => `<tr><td>${new Date(S.ts[j]).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>${vis.map((i) => `<td>${fv(series[i], S.rows[j][i])}</td>`).join('')}</tr>`).join('')}</table></div>`;
-    }
-    morph(box, `<div class="lbar">
-        <select id="sw"><option value="">Woche auswählen</option>${weeks.map((w) => `<option value="${w.key}" ${w.key === S.week ? 'selected' : ''}>${esc(w.label)}</option>`).join('')}</select>
-        <select id="sd"><option value="all">Ganze Woche</option>${days.map((d) => `<option value="${esc(d)}" ${d === S.day ? 'selected' : ''}>${new Date(d).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' })}</option>`).join('')}</select>
-        <select id="sr"><option value="hourly" ${S.res === 'hourly' ? 'selected' : ''}>Stündlich</option><option value="raw" ${S.res === 'raw' ? 'selected' : ''}>5 Minuten</option></select>
-        <button class="btn ${S.mode === 'chart' ? '' : 'sec'}" data-act="smode" data-v="chart">Diagramm</button><button class="btn ${S.mode === 'table' ? '' : 'sec'}" data-act="smode" data-v="table">Tabelle</button>
-        <button class="btn sec" data-act="scsv" ${S.ts.length ? '' : 'disabled'}>CSV</button></div>
-      <div class="sers">${series.map((x) => `<button class="ser ${S.off[x.k] ? '' : 'on'}" data-act="sser" data-v="${x.k}" style="--c:${x.col}"><i></i>${esc(x.n)}</button>`).join('')}</div>
-      ${body}`);
-    const info = this.shadowRoot.getElementById('statinfo');
-    if (info) info.textContent = S.ts.length ? `${idx.length} Werte` : '';
-    if (!this._statBound) {
-      this._statBound = true;
-      box.addEventListener('change', (e) => {
-        const t = e.composedPath()[0];
-        if (t.id === 'sw') { S.week = t.value; S.day = 'all'; S.rows = []; S.ts = []; this._loadStat(); }
-        else if (t.id === 'sd') { S.day = t.value; this._renderStat(); }
-        else if (t.id === 'sr') { S.res = t.value; this._loadStat(); }
-      });
-      box.addEventListener('mousemove', (e) => {
-        const svg = e.composedPath().find((el) => el.tagName === 'svg');
-        if (!svg || !this._chartGeo) return;
-        const r = svg.getBoundingClientRect(); const g = this._chartGeo;
-        const x = (e.clientX - r.left) / r.width * g.w;
-        const k = Math.max(0, Math.min(g.n - 1, Math.round((x - g.l) / (g.w - g.l - g.r) * (g.n - 1))));
-        if (k !== this._hov) { this._hov = k; this._renderStat(); }
-      });
-      box.addEventListener('mouseleave', () => { if (this._hov != null) { this._hov = null; this._renderStat(); } });
-    }
-  }
-
-  _statChart(series, vis, idx, S) {
-    const W = 1000; const H = 300; const l = 46; const r = 40; const t = 10; const b = 26;
-    const n = idx.length;
-    const pw = vis.filter((i) => !series[i].pct);
-    const max = Math.max(1000, ...pw.flatMap((i) => idx.map((j) => S.rows[j][i] || 0))) * 1.08;
-    const X = (k) => l + (n < 2 ? 0 : k / (n - 1) * (W - l - r));
-    const Y = (v, pct) => t + (H - t - b) * (1 - (pct ? v / 100 : v / max));
-    this._chartGeo = { w: W, l, r, n };
-    const path = (i) => { let d = ''; let pen = false; idx.forEach((j, k) => { const v = S.rows[j][i]; if (v == null) { pen = false; return; } d += `${pen ? 'L' : 'M'}${X(k).toFixed(1)},${Y(v, series[i].pct).toFixed(1)}`; pen = true; }); return d; };
-    // Beschriftungen als HTML über dem SVG (das SVG wird in der Breite gestreckt)
-    const px = (x) => `${(x / W * 100).toFixed(2)}%`; const py = (y) => `${(y / H * 100).toFixed(2)}%`;
-    const lab = [];
-    const grid = [0, 0.25, 0.5, 0.75, 1].map((f) => {
-      lab.push(`<span class="yl" style="left:0;width:${px(l - 6)};top:${py(Y(max * f))}">${nf(max * f / 1000, 1)}</span><span class="yr" style="left:${px(W - r + 6)};top:${py(Y(max * f))}">${Math.round(f * 100)} %</span>`);
-      return `<line x1="${l}" x2="${W - r}" y1="${Y(max * f)}" y2="${Y(max * f)}" class="gl" vector-effect="non-scaling-stroke"/>`;
-    }).join('');
-    // Tagesgrenzen
-    const marks = []; let last = '';
-    idx.forEach((j, k) => { const d = new Date(S.ts[j]); const key = d.toDateString(); if (key !== last) { last = key; marks.push(`<line x1="${X(k)}" x2="${X(k)}" y1="${t}" y2="${H - b}" class="dl" vector-effect="non-scaling-stroke"/>`); lab.push(`<span class="xl" style="left:${px(X(k) + 4)}">${d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}</span>`); } });
-    if (S.day !== 'all') { marks.length = 0; idx.forEach((j, k) => { const h = new Date(S.ts[j]); if (h.getMinutes() === 0 && h.getHours() % 3 === 0) lab.push(`<span class="xl c" style="left:${px(X(k))}">${h.getHours()} Uhr</span>`); }); lab.splice(0, lab.length, ...lab.filter((x) => !x.includes('class="xl"'))); }
-    const hov = this._hov != null && this._hov < n ? this._hov : null;
-    const tip = hov == null ? '' : `<line x1="${X(hov)}" x2="${X(hov)}" y1="${t}" y2="${H - b}" class="hl" vector-effect="non-scaling-stroke"/>`;
-    const tipBox = hov == null ? '' : `<div class="tip"><b>${new Date(S.ts[idx[hov]]).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</b>
-      ${vis.map((i) => `<span style="--c:${series[i].col}"><i></i>${esc(series[i].n)} <b>${S.rows[idx[hov]][i] == null ? '–' : series[i].pct ? `${nf(S.rows[idx[hov]][i], 0)} %` : fW(S.rows[idx[hov]][i])}</b></span>`).join('')}</div>`;
-    return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${grid}${marks.join('')}
-      ${vis.map((i) => `<path d="${path(i)}" fill="none" stroke="${series[i].col}" stroke-width="${series[i].pct ? 1.5 : 2}" ${series[i].pct ? 'stroke-dasharray="5 4"' : ''} vector-effect="non-scaling-stroke"/>`).join('')}${tip}</svg>${lab.join('')}
-      <div class="ax"><span>kW</span><span>Füllstand</span></div>${tipBox}</div>`;
-  }
-
-  _statCsv() {
-    const S = this._stat;
-    const head = ['Zeit', ...S.series.map((x) => `${x.n} [${x.pct ? '%' : 'W'}]`)].join(';');
-    const lines = S.ts.map((t, j) => [new Date(t).toLocaleString('de-DE'), ...S.rows[j].map((v) => (v == null ? '' : String(Math.round(v * 10) / 10).replace('.', ',')))].join(';'));
-    this._download(`senec-statistik-${S.week}.csv`, [head, ...lines].join('\n'), 'text/csv');
-  }
 
   _tr(s) {
     const T = { deactivated: 'Inaktiv', deactivate: 'Inaktiv', manual: 'Manuell', auto: 'Automatisch', automatic: 'Automatisch', no_limit: 'Keine', off: 'Aus', on: 'Ein' };
@@ -847,9 +677,6 @@ class SenecManagerCard extends HTMLElement {
     try {
       if (ds.act === 'enable') await this._enableAll();
       else if (ds.act.startsWith('log')) this._logAction(ds.act);
-      else if (ds.act === 'smode') { this._stat.mode = ds.v; this._renderStat(); }
-      else if (ds.act === 'sser') { this._stat.off[ds.v] = !this._stat.off[ds.v]; this._renderStat(); }
-      else if (ds.act === 'scsv') this._statCsv();
       else if (ds.act === 'tog') {
         const on = ds.on === '1';
         if (this._config.confirm && !window.confirm(`${ds.n} ${on ? 'ausschalten' : 'einschalten'}?`)) return;
