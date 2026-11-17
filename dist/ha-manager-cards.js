@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.1.1 – 12 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.1.2 – 12 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== esphome-manager-card.js ===== */
 {
@@ -8617,14 +8617,14 @@ if (!customElements.get('home-summary-card')) {
  *   solar_forecast: true                  # PV-Prognose aus den Energie-Einstellungen (Tageswert)
  *   power: { forecast: sensor.x_leistungsprognose, clearsky: sensor.x_clearsky_leistung }   # Kurven aus dem Attribut forecast
  *   area_power: { kinderzimmer: sensor.x }   # Standard: sensor.leistung_<bereich>
- *   cameras: { buro: camera.x, garage: camera.y }   # Kamerabild im Hintergrund der Raumkachel
+ *   cameras: { buro: camera.x, garage: camera.y }   # Kamera je Raum (Icon + Raum-Popup); camera_background: true zeigt sie zusätzlich groß in der Raumkachel
  *   exclude_areas: [pv]
  *   hide_label: dashboard_ausgeblendet    # per Label ausgeblendete Geräte zählen nicht mit
  *   links: [{ name, icon, path, color, integration, entity }]
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  */
 {
-const VERSION = '2.1.1';
+const VERSION = '2.1.2';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -9406,7 +9406,7 @@ class HomeDashboardCard extends HTMLElement {
       const c = this._climate(a, sts);
       const pid = this._powerId(a);
       const p = num(hass.states[pid]);
-      const cam = this._config.cameras[a.area_id] && hass.states[this._config.cameras[a.area_id]];
+      const cam = this._config.camera_background && this._config.cameras[a.area_id] && hass.states[this._config.cameras[a.area_id]];
       const sub = [c.temp != null && `${nf(c.temp)} °C`, c.hum != null && `${nf(c.hum, 0)} %`].filter(Boolean).join(' · ');
       return `<div class="card rc click ${cam ? 'withcam' : ''}" data-k="${esc(a.area_id)}" data-pop="area:${esc(a.area_id)}">
         ${cam ? '<div class="cam" data-keep></div>' : ''}<div class="bgl">${cam ? '' : this._spark(pid)}</div>
@@ -9432,7 +9432,7 @@ class HomeDashboardCard extends HTMLElement {
   /** Kamerabilder einmalig in die Raumkacheln hängen (bleiben beim Aktualisieren erhalten) */
   _mountCams() {
     const hass = this._hass;
-    for (const [areaId, id] of Object.entries(this._config.cameras || {})) {
+    for (const [areaId, id] of Object.entries(this._config.camera_background ? this._config.cameras || {} : {})) {
       const slot = this.shadowRoot.querySelector(`.rc[data-k="${window.CSS && window.CSS.escape ? window.CSS.escape(areaId) : areaId}"] .cam`);
       if (!slot || !hass.states[id]) continue;
       let c = this._camEls[id];
@@ -9715,4 +9715,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.1.1 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.1.2 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
