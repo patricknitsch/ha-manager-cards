@@ -59,3 +59,15 @@ Filter, Suche, Details zum Aufklappen). Im Link stehen die Anzahl der Fehler und
 links:
   - { name: HA-Log, icon: mdi:math-log, color: "#03a9f4", popup: log }
 ```
+
+## SENEC Manager Card (Speicher)
+
+Speicher-Übersicht für SENEC.Home V2/V3/V4 auf Basis der Integration [ha-senec-v3](https://github.com/marq24/ha-senec-v3)
+(lokal und WebAPI), angelehnt an das Dashboard des ioBroker.senec-Adapters: Batterie, Gesundheit und Zyklen, Temperaturen,
+Zellspannungen als Heatmap, Netz, PV-Strings, Wallbox, Funktionen, Steuerung (Zwangsladung, Notstrom-Reserve, Steckdosen) und System.
+Detailsensoren, die die Integration deaktiviert ausliefert, lassen sich in der Karte mit einem Klick aktivieren (Administratoren).
+
+```yaml
+type: custom:senec-manager-card
+capacity: 10      # optional, nutzbare Kapazität in kWh (sonst aus dem Modellcode)
+```
