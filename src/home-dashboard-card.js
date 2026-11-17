@@ -17,7 +17,7 @@
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  */
 {
-const VERSION = '2.1.0';
+const VERSION = '2.1.1';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -176,7 +176,8 @@ const STYLE = `
   .hh .t small { display:block; font-size:13px; color: var(--secondary-text-color); }
   .hh .t b { font-size: 30px; font-weight: 700; line-height:1.1; }
   .vals { display:grid; gap:8px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); flex:1 1 100%; }
-  .val { display:flex; align-items:center; gap:8px; padding: 8px 12px; border-radius: 14px; background: var(--secondary-background-color); min-width: 108px; }
+  .val { display:flex; align-items:center; gap:8px; padding: 8px 12px; border-radius: 14px; min-width: 108px;
+    background: color-mix(in srgb, var(--c) 9%, transparent); border: 1px solid color-mix(in srgb, var(--c) 22%, transparent); }
   .val ha-icon { --mdc-icon-size:22px; color: var(--c); }
   .val div { line-height:1.15; } .val b { font-size:15px; } .val small { display:block; font-size:12px; color: var(--secondary-text-color); }
   .chart { position:relative; height: 150px; }
@@ -727,6 +728,8 @@ class HomeDashboardCard extends HTMLElement {
   _renderLinks() {
     const hass = this._hass;
     const html = (this._config.links || []).map((l, i) => {
+      // Links zu Integrationen ohne Geräte (nicht installiert) ausblenden, außer show_empty: true
+      if (l.integration && !l.show_empty && !this._linkStats(l.integration).n) return '';
       const info = [];
       if (l.integration) {
         const s = this._linkStats(l.integration);
@@ -750,7 +753,7 @@ class HomeDashboardCard extends HTMLElement {
         <div class="n"><b>${esc(l.name || l.path)}</b><span>${info.join(' · ')}</span></div><ha-icon icon="mdi:chevron-right"></ha-icon></div>`;
     }).join('');
     this._set('links', html);
-    this.shadowRoot.getElementById('linksec').hidden = !(this._config.links || []).length;
+    this.shadowRoot.getElementById('linksec').hidden = !html;
   }
 
   _spark(id) {
