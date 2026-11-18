@@ -102,6 +102,8 @@ script:
         data:
           title: "Home Assistant"
           message: "{{ nachricht }}"
+          # Namen wie grohe_smarthome sonst als Markdown (kursiv) interpretiert
+          parse_mode: plain_text
 
 automation:
   - id: integrationen_stoerung_melden
@@ -131,12 +133,21 @@ automation:
       - action: script.integrationen_telegram
         data:
           zeit: "{{ now().timestamp() }}"
-          nachricht: >-
-            {% if dazu %}⚠️ Störung:
-            {% for p in dazu %}• {{ p }}
-            {% endfor %}{% endif %}{% if weg %}✅ Behoben:
-            {% for p in weg %}• {{ p }}
-            {% endfor %}{% endif %}
+          nachricht: |-
+            {%- set T = {'offline': 'offline', 'setup_retry': 'Verbindung wird wiederholt', 'setup_error': 'Einrichtung fehlgeschlagen', 'not_loaded': 'nicht geladen', 'migration_error': 'Migration fehlgeschlagen', 'failed_unload': 'Entladen fehlgeschlagen'} -%}
+            {%- macro zeile(p, mit_grund) -%}
+            {%- set dom = p.split(' | ')[0] -%}{%- set rest = p.split(' | ', 1)[1] -%}
+            {%- set name = rest.rsplit(': ', 1)[0] -%}{%- set grund = rest.rsplit(': ', 1)[1] | replace('Verbindung ', '') -%}
+            • {{ name }}{% if mit_grund %} – {{ T.get(grund, grund) }}{% endif %} ({{ dom }})
+            {%- endmacro -%}
+            {%- if dazu %}⚠️ Störung
+            {% for p in dazu %}{{ zeile(p, true) }}
+            {% endfor %}{% endif -%}
+            {%- if dazu and weg %}
+            {% endif -%}
+            {%- if weg %}✅ Wieder in Ordnung
+            {% for p in weg %}{{ zeile(p, false) }}
+            {% endfor %}{% endif -%}
 
   - id: integrationen_log_fehler_melden
     alias: "Integrationen: Log-Fehler melden"
@@ -190,6 +201,6 @@ automation:
       - action: script.integrationen_telegram
         data:
           zeit: "{{ as_timestamp(trigger.event.time_fired) }}"
-          nachricht: >-
-            {{ '🔌 Verbindungsproblem' if verbindung else '❗ Fehler' }} in {{ dom }}:
+          nachricht: |-
+            {{ '🔌 Verbindungsproblem' if verbindung else '❗ Fehler' }} – {{ dom }}
             {{ ((trigger.event.data.message | default(['']))[0] | string)[:300] }}{% if (trigger.event.data.count | default(1)) > 1 %} ({{ trigger.event.data.count }}×){% endif %}
