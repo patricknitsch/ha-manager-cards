@@ -17,7 +17,7 @@
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  */
 {
-const VERSION = '2.4.1';
+const VERSION = '2.4.2';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -1071,12 +1071,17 @@ class HomeDashboardCard extends HTMLElement {
       } else if (ds.act === 'logf') { this._logF = ds.v; this._updatePopup();
       } else if (ds.act === 'logx') { if (this._logOpen.has(ds.k)) this._logOpen.delete(ds.k); else this._logOpen.add(ds.k); this._updatePopup();
       } else if (ds.act === 'logr') { this._fetchLog(true);
+      } else if (ds.act === 'logclear') {
+        if (!window.confirm('Systemprotokoll zurücksetzen? Alle Einträge im Home-Assistant-Log werden gelöscht.')) return;
+        await hass.callService('system_log', 'clear', {});
+        this._logOpen = new Set(); this._fetchLog(true);
+        this._fire('hass-notification', { message: 'Systemprotokoll zurückgesetzt' });
       } else if (ds.act === 'logall') { this._closePopup(); this._navigate('/config/logs');
       } else if (ds.act === 'restart') {
         if (!window.confirm('Home Assistant jetzt neu starten?')) return;
         await hass.callService('homeassistant', 'restart', {});
       } else if (ds.act === 'intreload') {
-        await hass.callWS({ type: 'config_entries/reload', entry_id: ds.e });
+        await hass.callService('homeassistant', 'reload_config_entry', { entry_id: ds.e });
         this._fire('hass-notification', { message: `${ds.n} wird neu geladen` });
         setTimeout(() => this._fetchSys(true), 3000);
       } else if (ds.act === 'intopen') { this._closePopup(); this._navigate(`/config/integrations/integration/${ds.d}`);
@@ -1335,7 +1340,7 @@ class HomeDashboardCard extends HTMLElement {
         const ts = (t) => (t ? new Date(t * 1000).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '');
         const bar = `<div class="lbar">${tab('all', 'Alle', all.length)}${tab('error', 'Fehler', cnt(fl.error))}${tab('warning', 'Warnungen', cnt(fl.warning))}${tab('info', 'Info', cnt(fl.info))}
           <input class="lq" data-logq placeholder="Suchen …" type="search">
-          <button class="btn sec" data-act="logr" title="Neu laden">↻</button><button class="btn sec" data-act="logall">Vollständiges Log</button></div>
+          <button class="btn sec" data-act="logr" title="Neu laden">↻</button><button class="btn sec" data-act="logclear" title="Systemprotokoll zurücksetzen">Log leeren</button><button class="btn sec" data-act="logall">Vollständiges Log</button></div>
           <div class="linf">${this._logErr ? `<span style="color:#f44336">${esc(this._logErr)}</span>` : `Stand ${this._logTs ? new Date(this._logTs).toLocaleTimeString('de-DE') : '–'} · aktualisiert sich alle 10 s`}</div>`;
         const body = rows.length ? `<div class="lst">${rows.map((e) => {
           const k = `${e.name}|${(e.source || []).join(':')}|${(e.message || [])[0] || ''}`;

@@ -74,7 +74,10 @@ script:
   integrationen_telegram:
     alias: Integrationen – Telegram-Meldung
     icon: mdi:send
-    mode: queued
+    # parallel statt Warteschlange: bei Internetausfall staut sich nichts, was später nachgesendet würde
+    mode: parallel
+    max: 10
+    max_exceeded: silent
     fields:
       nachricht:
         name: Nachricht
@@ -82,9 +85,20 @@ script:
         selector:
           text:
             multiline: true
+      zeit:
+        name: Zeitpunkt des Ereignisses (Unix-Zeit)
+        required: false
+        selector:
+          number:
+            mode: box
     sequence:
-      # Versand über die Telegram-Bot-Integration an den Standard-Chat; bei Bedarf nur hier anpassen
+      # veraltete Meldungen (älter als 2 Minuten) verwerfen statt nachzusenden
+      - condition: template
+        value_template: "{{ zeit is not defined or zeit in ['', none] or now().timestamp() - (zeit | float(0)) < 120 }}"
+      # Versand über die Telegram-Bot-Integration an den Standard-Chat; bei Bedarf nur hier anpassen.
+      # Ohne Internet schlägt der Versand fehl und die Meldung wird verworfen.
       - action: telegram_bot.send_message
+        continue_on_error: true
         data:
           title: "Home Assistant"
           message: "{{ nachricht }}"
@@ -93,7 +107,8 @@ automation:
   - id: integrationen_stoerung_melden
     alias: "Integrationen: Störung melden"
     description: Meldet neue und behobene Störungen überwachter Integrationen (Verbindung, Geräte offline).
-    mode: queued
+    mode: parallel
+    max: 5
     triggers:
       - trigger: state
         entity_id: sensor.integrationen_stoerungen
@@ -115,6 +130,7 @@ automation:
         value_template: "{{ dazu | count > 0 or weg | count > 0 }}"
       - action: script.integrationen_telegram
         data:
+          zeit: "{{ now().timestamp() }}"
           nachricht: >-
             {% if dazu %}⚠️ Störung:
             {% for p in dazu %}• {{ p }}
@@ -125,8 +141,8 @@ automation:
   - id: integrationen_log_fehler_melden
     alias: "Integrationen: Log-Fehler melden"
     description: Meldet Fehler, Timeouts und Verbindungsabbrüche überwachter Integrationen aus dem Log.
-    mode: queued
-    max: 20
+    mode: parallel
+    max: 10
     max_exceeded: silent
     triggers:
       - trigger: event
@@ -173,6 +189,7 @@ automation:
             {{ ns.l | join(';') }}
       - action: script.integrationen_telegram
         data:
+          zeit: "{{ as_timestamp(trigger.event.time_fired) }}"
           nachricht: >-
             {{ '🔌 Verbindungsproblem' if verbindung else '❗ Fehler' }} in {{ dom }}:
             {{ ((trigger.event.data.message | default(['']))[0] | string)[:300] }}{% if (trigger.event.data.count | default(1)) > 1 %} ({{ trigger.event.data.count }}×){% endif %}
