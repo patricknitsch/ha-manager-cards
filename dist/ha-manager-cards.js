@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.4.0 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.5.0 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== esphome-manager-card.js ===== */
 {
@@ -9360,7 +9360,7 @@ if (!customElements.get('home-summary-card')) {
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  */
 {
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -9771,7 +9771,18 @@ class HomeDashboardCard extends HTMLElement {
   _intName(domain) { return this._manifests?.[domain]?.name || (this._entries || []).find((e) => e.domain === domain)?.title || domain; }
 
   /** überwachte Integrationen: eigene Auswahl oder Integrationen aus Links und Herstellerkarten */
+  /** Helfer für die Auswahl (gemeinsam mit der Überwachung in Home Assistant), sonst Benutzerdaten */
+  _monEntity() {
+    const id = this._config.monitor_entity || 'input_text.integrationen_ueberwachung';
+    return this._hass?.states[id] ? id : null;
+  }
+
   _monDomains() {
+    const me = this._monEntity();
+    if (me) {
+      const v = String(this._hass.states[me].state || '');
+      if (!['unknown', 'unavailable'].includes(v)) return v.split(',').map((x) => x.trim()).filter(Boolean).sort();
+    }
     if (Array.isArray(this._monSel)) return this._monSel;
     const d = new Set([...(this._config.links || []).map((l) => l.integration), ...(this._config.makers || []).map((m) => m.integration)].filter(Boolean));
     return [...d].sort();
@@ -10415,7 +10426,13 @@ class HomeDashboardCard extends HTMLElement {
         const sel = new Set(this._monDomains());
         if (ds.act === 'monall') sel.clear(); else if (sel.has(ds.d)) sel.delete(ds.d); else sel.add(ds.d);
         this._monSel = [...sel].sort(); this._updatePopup(); this._renderLinks();
-        await hass.callWS({ type: 'frontend/set_user_data', key: 'hmc_integrations', value: this._monSel });
+        const me = this._monEntity();
+        if (me) {
+          const v = this._monSel.join(',');
+          const max = hass.states[me].attributes.max || 255;
+          if (v.length > max) { this._fire('hass-notification', { message: `Zu viele Integrationen für ${me} (max. ${max} Zeichen)` }); return; }
+          await hass.callService('input_text', 'set_value', { entity_id: me, value: v });
+        } else await hass.callWS({ type: 'frontend/set_user_data', key: 'hmc_integrations', value: this._monSel });
       } else if (ds.act === 'close') this._closePopup();
     } catch (err) {
       this._fire('hass-notification', { message: `Fehler: ${err.message || err}` });
@@ -10601,7 +10618,7 @@ class HomeDashboardCard extends HTMLElement {
             .filter((x) => !q || `${x.d} ${x.n}`.toLowerCase().includes(q)).sort((a, b) => a.n.localeCompare(b.n, 'de'));
           return `<div class="lbar"><input class="lq" data-monq placeholder="Integration suchen …" type="search">
               <button class="btn sec" data-act="monall" data-v="0">Keine</button><button class="btn" data-act="monedit">Fertig</button></div>
-            <div class="linf">${sel.size} ausgewählt · die Auswahl wird für deinen Benutzer gespeichert</div>
+            <div class="linf">${sel.size} ausgewählt · ${this._monEntity() ? 'gilt auch für die Überwachung mit Telegram-Meldungen' : 'die Auswahl wird für deinen Benutzer gespeichert'}</div>
             <div class="msel">${doms.map((x) => `<label class="mchk ${sel.has(x.d) ? 'on' : ''}" data-act="montog" data-d="${esc(x.d)}" data-k="m-${esc(x.d)}">
               <ha-icon icon="${sel.has(x.d) ? 'mdi:checkbox-marked' : 'mdi:checkbox-blank-outline'}"></ha-icon><span>${esc(x.n)}<small>${esc(x.d)}</small></span></label>`).join('')}</div>`;
         }
@@ -10705,4 +10722,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.4.0 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.5.0 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');

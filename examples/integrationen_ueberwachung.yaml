@@ -1,0 +1,173 @@
+# Überwachung von Integrationen mit Telegram-Meldungen
+# Ablage: /config/packages/system/integrationen_ueberwachung.yaml, danach Home Assistant neu starten.
+#
+# input_text.integrationen_ueberwachung   welche Integrationen (Domains, durch Komma getrennt) überwacht werden.
+#                                         Die Auswahl im Dashboard-Popup „Integrationen“ schreibt direkt hier hinein.
+# sensor.integrationen_stoerungen         prüft jede Minute die Konfigurationseinträge (Verbindung) und die Geräte (offline).
+# Automation „Störung melden“             meldet neue und behobene Störungen, sobald sie 3 Minuten bestehen.
+# Automation „Log-Fehler melden“          meldet sofort Fehler, Timeouts und Verbindungsabbrüche aus dem Log
+#                                         (fehlgeschlagene Abfragen, „Error fetching …“, ClientConnectorError …),
+#                                         dieselbe Integration höchstens alle 10 Minuten.
+# script.integrationen_telegram           versendet die Meldungen; nur hier ist Telegram eingetragen.
+
+system_log:
+  # löst für jede Warnung und jeden Fehler im Log das Ereignis system_log_event aus
+  fire_event: true
+
+input_text:
+  integrationen_ueberwachung:
+    name: Überwachte Integrationen
+    icon: mdi:puzzle-check-outline
+    max: 255
+  integrationen_logsperre:
+    name: Integrationen letzte Log-Meldungen
+    icon: mdi:timer-sand
+    max: 255
+
+template:
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+      - trigger: state
+        entity_id: input_text.integrationen_ueberwachung
+      - trigger: homeassistant
+        event: start
+    actions:
+      - variables:
+          doms: >-
+            {{ states('input_text.integrationen_ueberwachung').split(',') | map('trim') | reject('eq', '') | list }}
+          probleme: >-
+            {%- set ns = namespace(seen=[], badids=[], devs=[], out=[]) -%}
+            {%- for s in states -%}
+              {%- set cid = config_entry_id(s.entity_id) -%}
+              {%- if cid and cid not in ns.seen -%}
+                {%- set ns.seen = ns.seen + [cid] -%}
+                {%- if config_entry_attr(cid, 'domain') in doms and not config_entry_attr(cid, 'disabled_by') -%}
+                  {%- set st = (config_entry_attr(cid, 'state') | string).split('.')[-1] | lower -%}
+                  {%- if st not in ['loaded', 'setup_in_progress'] -%}
+                    {%- set ns.badids = ns.badids + [cid] -%}
+                    {%- set ns.out = ns.out + [config_entry_attr(cid, 'domain') ~ ' | ' ~ config_entry_attr(cid, 'title') ~ ': Verbindung ' ~ st] -%}
+                  {%- endif -%}
+                {%- endif -%}
+              {%- endif -%}
+              {%- if s.state == 'unavailable' and cid and cid not in ns.badids and config_entry_attr(cid, 'domain') in doms -%}
+                {%- set did = device_id(s.entity_id) -%}
+                {%- if did and did not in ns.devs -%}
+                  {%- set ns.devs = ns.devs + [did] -%}
+                  {%- if expand(device_entities(did)) | rejectattr('state', 'eq', 'unavailable') | list | count == 0 -%}
+                    {%- set ns.out = ns.out + [config_entry_attr(cid, 'domain') ~ ' | ' ~ (device_attr(did, 'name_by_user') or device_attr(did, 'name')) ~ ': offline'] -%}
+                  {%- endif -%}
+                {%- endif -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.out | unique | sort | list }}
+    sensor:
+      - name: Integrationen Störungen
+        unique_id: integrationen_stoerungen
+        icon: mdi:puzzle-remove-outline
+        state: "{{ probleme | count }}"
+        attributes:
+          probleme: "{{ probleme }}"
+          integrationen: "{{ doms }}"
+
+script:
+  integrationen_telegram:
+    alias: Integrationen – Telegram-Meldung
+    icon: mdi:send
+    mode: queued
+    fields:
+      nachricht:
+        name: Nachricht
+        required: true
+        selector:
+          text:
+            multiline: true
+    sequence:
+      # Versand über die Telegram-Bot-Integration an den Standard-Chat; bei Bedarf nur hier anpassen
+      - action: telegram_bot.send_message
+        data:
+          title: "Home Assistant"
+          message: "{{ nachricht }}"
+
+automation:
+  - id: integrationen_stoerung_melden
+    alias: "Integrationen: Störung melden"
+    description: Meldet neue und behobene Störungen überwachter Integrationen (Verbindung, Geräte offline).
+    mode: queued
+    triggers:
+      - trigger: state
+        entity_id: sensor.integrationen_stoerungen
+        attribute: probleme
+        # kurze Aussetzer nicht melden
+        for: "00:03:00"
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.from_state is not none and trigger.from_state.state not in ['unknown', 'unavailable']
+             and trigger.to_state.state not in ['unknown', 'unavailable'] }}
+    actions:
+      - variables:
+          alt: "{{ trigger.from_state.attributes.get('probleme', []) }}"
+          neu: "{{ trigger.to_state.attributes.get('probleme', []) }}"
+          dazu: "{{ neu | reject('in', alt) | list }}"
+          weg: "{{ alt | reject('in', neu) | list }}"
+      - condition: template
+        value_template: "{{ dazu | count > 0 or weg | count > 0 }}"
+      - action: script.integrationen_telegram
+        data:
+          nachricht: >-
+            {% if dazu %}⚠️ Störung:
+            {% for p in dazu %}• {{ p }}
+            {% endfor %}{% endif %}{% if weg %}✅ Behoben:
+            {% for p in weg %}• {{ p }}
+            {% endfor %}{% endif %}
+
+  - id: integrationen_log_fehler_melden
+    alias: "Integrationen: Log-Fehler melden"
+    description: Meldet Fehler, Timeouts und Verbindungsabbrüche überwachter Integrationen aus dem Log.
+    mode: queued
+    max: 20
+    max_exceeded: silent
+    triggers:
+      - trigger: event
+        event_type: system_log_event
+    variables:
+      quelle: "{{ trigger.event.data.name | default('') }}"
+      dom: >-
+        {{ quelle | regex_findall_index('(?:components|custom_components)\.([a-z0-9_]+)', 0)
+           if quelle is search('(?:components|custom_components)\.[a-z0-9_]+') else '' }}
+      text: >-
+        {{ (trigger.event.data.message | default([]) | join(' ')) ~ ' ' ~ (trigger.event.data.exception | default('')) }}
+      verbindung: >-
+        {{ text is search('time(d)?[ -]?out|TimeoutError|ClientConnectorError|cannot connect|connection (refused|reset|error|lost|aborted)|unreachable|nicht erreichbar|no route to host|server disconnected|failed to connect|Error fetching|Error requesting|update failed', ignorecase=True) }}
+      # Sperrliste „domain=zeitstempel;…“ der zuletzt gemeldeten Integrationen
+      sperre: >-
+        {%- set ns = namespace(d={}) -%}
+        {%- for x in states('input_text.integrationen_logsperre').split(';') if '=' in x -%}
+          {%- set ns.d = dict(ns.d, **{x.split('=')[0]: x.split('=')[1] | float(0)}) -%}
+        {%- endfor -%}
+        {{ ns.d }}
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ dom != '' and dom in states('input_text.integrationen_ueberwachung').split(',') | map('trim') | list
+             and (trigger.event.data.level in ['ERROR', 'CRITICAL'] or verbindung) }}
+      - condition: template
+        value_template: "{{ now().timestamp() - (sperre.get(dom, 0) | float(0)) > 600 }}"
+    actions:
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.integrationen_logsperre
+        data:
+          value: >-
+            {%- set neu = dict(sperre, **{dom: now().timestamp() | int}) -%}
+            {%- set ns = namespace(l=[]) -%}
+            {%- for k, v in neu.items() if now().timestamp() - (v | float(0)) < 3600 -%}
+              {%- set ns.l = ns.l + [k ~ '=' ~ (v | int)] -%}
+            {%- endfor -%}
+            {{ ns.l | join(';') }}
+      - action: script.integrationen_telegram
+        data:
+          nachricht: >-
+            {{ '🔌 Verbindungsproblem' if verbindung else '❗ Fehler' }} in {{ dom }}:
+            {{ ((trigger.event.data.message | default(['']))[0] | string)[:300] }}{% if (trigger.event.data.count | default(1)) > 1 %} ({{ trigger.event.data.count }}×){% endif %}

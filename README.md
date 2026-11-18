@@ -108,5 +108,10 @@ links:
   - { name: Integrationen, icon: mdi:puzzle-check-outline, color: "#7e57c2", popup: integrations }
 ```
 
+Gibt es den Helfer `input_text.integrationen_ueberwachung` (Option `monitor_entity`), speichert das Popup die Auswahl dort.
+Dieselbe Auswahl nutzt dann die Überwachung in Home Assistant, die unabhängig vom Dashboard läuft und per Telegram meldet:
+Verbindungsfehler, Geräte offline sowie Fehler, Timeouts und Verbindungsabbrüche aus dem Log.
+Das Paket dazu liegt unter [`examples/integrationen_ueberwachung.yaml`](examples/integrationen_ueberwachung.yaml).
+
 Die Wartung zeigt zusätzlich Integrationen mit Fehler (mit „Neu laden“) und ausstehende Neustarts.
 Links zu Integrationen tragen am Icon die Anzahl aktiver Geräte (eingeschaltet bzw. in Betrieb).
