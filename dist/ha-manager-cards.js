@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.6.0 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.6.1 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== esphome-manager-card.js ===== */
 {
@@ -8343,7 +8343,7 @@ if (!customElements.get('xsense-manager-card')) {
  *   links:                       # optional, zusätzliche Kacheln mit Verlinkung
  *     - { name: Frigate, icon: mdi:cctv, path: /dashboard-frigate, color: '#e53935' }
  */
-const VERSION = '1.4.0';
+const VERSION = '1.4.1';
 const EVT = 'area-overview-card-area';
 const STORE = 'area-overview-card.area';
 const BAD = ['unavailable', 'unknown'];
@@ -8498,6 +8498,8 @@ async function defineVariant(tag) {
       const el = super._updateCard(d);
       if (!el || !el.querySelector) return el;
       let b = el.querySelector('.aoc-hide');
+      // Ausblenden ändert die Geräte-Registry – nur für Administratoren
+      if (!this._hass?.user?.is_admin) { if (b) b.remove(); el.classList.remove('aoc-hidden'); return el; }
       if (!b) {
         b = document.createElement('button');
         b.className = 'aoc-hide';
@@ -8575,6 +8577,7 @@ class AreaOverviewCard extends HTMLElement {
     this._hass = hass;
     HIDE.sync(hass);
     if (this._config.admin_only) HIDE.restrict(hass, this._config.admin_only);
+    this.toggleAttribute('data-noadmin', !hass.user?.is_admin);
     this._render(regChanged);
   }
 
@@ -8680,6 +8683,7 @@ class AreaOverviewCard extends HTMLElement {
         .tog[disabled] { opacity:.4; cursor:default; }
         .cover { display:flex; gap:2px; }
         .empty { padding:24px; text-align:center; color: var(--secondary-text-color); }
+        :host([data-noadmin]) .hidebtn, :host([data-noadmin]) .rhide, :host([data-noadmin]) [data-act="showhidden"] { display:none !important; }
         :host([data-mode="list"]) #areas, :host([data-mode="list"]) #ahead, :host([data-mode="list"]) #makers,
         :host([data-mode="list"]) #other, :host([data-mode="list"]) #empty { display:none !important; }
         :host(:not([data-mode="list"])) #alist { display:none; }
@@ -9377,7 +9381,7 @@ if (!customElements.get('home-summary-card')) {
  *   links: [{ …, admin: true }]                # einzelnen Link nur Administratoren zeigen
  */
 {
-const VERSION = '2.5.0';
+const VERSION = '2.5.1';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -10638,7 +10642,7 @@ class HomeDashboardCard extends HTMLElement {
             <button class="btn sec" data-act="intreload" data-e="${esc(e.entry_id)}" data-n="${esc(e.title)}">Neu laden</button></div>`))
           + sec('Updates', d.updates.map((s) => `<div class="it" data-k="${s.entity_id}" data-more="${s.entity_id}"><ha-icon icon="mdi:package-up" style="--c:#ffa600"></ha-icon>
             <div class="n">${esc(this._name(s))}<small>${esc(s.attributes.installed_version || '')} → ${esc(s.attributes.latest_version || '')}</small></div>
-            <button class="btn" data-act="install" data-e="${s.entity_id}" data-n="${esc(this._name(s))}">Installieren</button></div>`))
+            ${this._hass.user?.is_admin ? `<button class="btn" data-act="install" data-e="${s.entity_id}" data-n="${esc(this._name(s))}">Installieren</button>` : ''}</div>`))
           + sec('Batterien', d.battery.map((s) => this._row(s, fmt(s), 'mdi:battery-alert-variant-outline', '#db4437')))
           + sec('Nicht erreichbar', d.offline.map(({ devId, d: dv }) => `<div class="it" data-k="${esc(devId)}" data-act="device" data-d="${esc(devId)}"><ha-icon icon="mdi:lan-disconnect" style="--c:#db4437"></ha-icon>
             <div class="n">${esc(dv.name_by_user || dv.name)}<small>${esc([hass.areas[dv.area_id]?.name, dv.manufacturer, dv.model].filter(Boolean).join(' · '))}</small></div></div>`));
@@ -10757,4 +10761,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.6.0 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.6.1 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');

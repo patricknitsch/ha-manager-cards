@@ -26,7 +26,7 @@
  *   links:                       # optional, zusätzliche Kacheln mit Verlinkung
  *     - { name: Frigate, icon: mdi:cctv, path: /dashboard-frigate, color: '#e53935' }
  */
-const VERSION = '1.4.0';
+const VERSION = '1.4.1';
 const EVT = 'area-overview-card-area';
 const STORE = 'area-overview-card.area';
 const BAD = ['unavailable', 'unknown'];
@@ -181,6 +181,8 @@ async function defineVariant(tag) {
       const el = super._updateCard(d);
       if (!el || !el.querySelector) return el;
       let b = el.querySelector('.aoc-hide');
+      // Ausblenden ändert die Geräte-Registry – nur für Administratoren
+      if (!this._hass?.user?.is_admin) { if (b) b.remove(); el.classList.remove('aoc-hidden'); return el; }
       if (!b) {
         b = document.createElement('button');
         b.className = 'aoc-hide';
@@ -258,6 +260,7 @@ class AreaOverviewCard extends HTMLElement {
     this._hass = hass;
     HIDE.sync(hass);
     if (this._config.admin_only) HIDE.restrict(hass, this._config.admin_only);
+    this.toggleAttribute('data-noadmin', !hass.user?.is_admin);
     this._render(regChanged);
   }
 
@@ -363,6 +366,7 @@ class AreaOverviewCard extends HTMLElement {
         .tog[disabled] { opacity:.4; cursor:default; }
         .cover { display:flex; gap:2px; }
         .empty { padding:24px; text-align:center; color: var(--secondary-text-color); }
+        :host([data-noadmin]) .hidebtn, :host([data-noadmin]) .rhide, :host([data-noadmin]) [data-act="showhidden"] { display:none !important; }
         :host([data-mode="list"]) #areas, :host([data-mode="list"]) #ahead, :host([data-mode="list"]) #makers,
         :host([data-mode="list"]) #other, :host([data-mode="list"]) #empty { display:none !important; }
         :host(:not([data-mode="list"])) #alist { display:none; }
