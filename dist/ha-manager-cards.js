@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.3.2 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.4.0 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== esphome-manager-card.js ===== */
 {
@@ -9360,7 +9360,7 @@ if (!customElements.get('home-summary-card')) {
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  */
 {
-const VERSION = '2.2.1';
+const VERSION = '2.3.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -9542,6 +9542,11 @@ const STYLE = `
   .lk .bub { width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex:none;
     background: color-mix(in srgb, var(--c, var(--primary-color)) 16%, transparent); }
   .lk .bub ha-icon { --mdc-icon-size:22px; color: var(--c, var(--primary-color)); }
+  .lk .bub { position:relative; }
+  .lk .bdg { position:absolute; top:-6px; right:-6px; min-width:18px; height:18px; padding:0 5px; border-radius:9px; box-sizing:border-box;
+    background: var(--c, var(--primary-color)); color:#fff; font-size:11px; font-weight:700; line-height:18px; text-align:center;
+    box-shadow: 0 0 0 2px var(--card-background-color, #1c1c1c); z-index:1; }
+  .lk .bdg.err { background:#f44336; } .lk .bdg.warn { background:#ff9800; }
   .lk .n { flex:1; min-width:0; } .lk .n b { display:block; font-size:15px; }
   .lk .n span { font-size:12.5px; color: var(--secondary-text-color); }
   .lk .ok { color: var(--success-color, #43a047); } .lk .err { color: var(--error-color, #db4437); } .lk .warn { color: var(--warning-color, #ffa600); }
@@ -9626,6 +9631,26 @@ const POP_CSS = `
     border-left: 6px solid var(--c); display:flex; flex-direction:column; gap:6px; }
   .warn b { font-size:16px; } .warn .tm { font-size:12px; color: var(--secondary-text-color); } .warn p { margin:0; font-size:14px; line-height:1.45; }
   .sec { font-weight:600; margin: 4px 4px 0; }
+  .mi { border-top:1px solid var(--divider-color); border-left:4px solid var(--c); }
+  .mi:first-child { border-top:none; }
+  .mh { display:flex; align-items:center; gap:10px; padding:10px 12px; cursor:pointer; flex-wrap:wrap; }
+  .mh:hover { background: var(--secondary-background-color); }
+  .mh .dot { width:10px; height:10px; border-radius:50%; background: var(--c); flex:none; }
+  .mh .n { flex:1; min-width:160px; font-size:15px; font-weight:500; }
+  .mh .n small { display:block; font-size:12px; font-weight:400; color: var(--secondary-text-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:520px; }
+  .mh .chs { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
+  .ch { font-size:12px; padding:2px 8px; border-radius:10px; background: var(--secondary-background-color); color: var(--secondary-text-color); white-space:nowrap; }
+  .ch.ok { background: rgba(76,175,80,.15); color:#4caf50; } .ch.warn { background: rgba(255,152,0,.16); color:#ff9800; } .ch.err { background: rgba(244,67,54,.15); color:#f44336; }
+  .mdet { padding: 0 12px 12px 34px; }
+  .msub { font-size:12px; font-weight:600; color: var(--secondary-text-color); margin:8px 0 2px; text-transform:uppercase; letter-spacing:.04em; }
+  .mrow { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:13px; }
+  .mrow > span:not(.mlv) { flex:1; min-width:0; overflow-wrap:anywhere; } .mrow small { display:block; font-size:11.5px; color: var(--secondary-text-color); }
+  .mrow ha-icon { --mdc-icon-size:18px; flex:none; } .mrow.click { cursor:pointer; } .mrow .btn { padding:4px 10px; font-size:12px; }
+  .mlv { font-weight:700; width:18px; text-align:center; flex:none; }
+  .msel { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:6px; }
+  .mchk { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:10px; border:1px solid var(--divider-color); cursor:pointer; font-size:14px; }
+  .mchk.on { border-color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 10%, transparent); }
+  .mchk ha-icon { color: var(--primary-color); flex:none; } .mchk small { display:block; font-size:11px; color: var(--secondary-text-color); }
   .host > * { display:block; }
   .host > .cams { margin-bottom: 14px; }
   .lbar { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
@@ -9664,7 +9689,7 @@ class HomeDashboardCard extends HTMLElement {
 
   connectedCallback() {
     clearInterval(this._tick);
-    this._tick = setInterval(() => { this._renderHeader(); this._fetchHist(); this._fetchForecast(); this._renderHaus(); this._fetchLog(); }, 30000);
+    this._tick = setInterval(() => { this._renderHeader(); this._fetchHist(); this._fetchForecast(); this._renderHaus(); this._fetchLog(); this._fetchSys(); }, 30000);
     this._onHide = () => this._render();
     HIDE.subs.add(this._onHide);
   }
@@ -9680,12 +9705,13 @@ class HomeDashboardCard extends HTMLElement {
     if (!this._histTs) this._fetchHist();
     if (!this._fcTs) this._fetchForecast();
     if (!this._logTs) this._fetchLog();
+    if (!this._sysTs) this._fetchSys();
   }
 
   /* ---------- Home-Assistant-Log (Systemprotokoll, nur Admins) ---------- */
   async _fetchLog(force) {
     const hass = this._hass;
-    const wanted = (this._config.links || []).some((l) => l.popup === 'log');
+    const wanted = (this._config.links || []).some((l) => ['log', 'integrations'].includes(l.popup));
     if (!hass || !wanted || this._logBusy) return;
     if (!force && this._logTs && Date.now() - this._logTs < 120000) return;
     this._logBusy = true;
@@ -9700,8 +9726,89 @@ class HomeDashboardCard extends HTMLElement {
       this._logTs = Date.now(); this._logBusy = false;
       const lv = (e) => String(e.level || '').toUpperCase();
       this._logSum = { err: this._log.filter((e) => ['ERROR', 'CRITICAL'].includes(lv(e))).length, warn: this._log.filter((e) => lv(e) === 'WARNING').length };
-      if (this._hass) { this._renderLinks(); if (this._pop?.key === 'log') this._updatePopup(); }
+      if (this._hass) { this._renderLinks(); if (['log', 'integrations'].includes(this._pop?.key)) this._updatePopup(); }
     }
+  }
+
+  /* ---------- Integrationen: Konfigurationseinträge, Reparaturen, Überwachung (nur Admins) ---------- */
+  async _fetchSys(force) {
+    const hass = this._hass;
+    if (!hass?.user?.is_admin || this._sysBusy) return;
+    if (!force && this._sysTs && Date.now() - this._sysTs < 60000) return;
+    this._sysBusy = true;
+    try {
+      const [entries, issues] = await Promise.all([
+        hass.callWS({ type: 'config_entries/get' }).catch(() => this._entries || []),
+        hass.callWS({ type: 'repairs/list_issues' }).then((r) => r.issues || []).catch(() => this._issues || []),
+      ]);
+      this._entries = entries; this._issues = issues;
+      if (this._monSel === undefined) {
+        const r = await hass.callWS({ type: 'frontend/get_user_data', key: 'hmc_integrations' }).catch(() => null);
+        this._monSel = Array.isArray(r?.value) ? r.value : null;
+      }
+      const doms = [...new Set(entries.map((e) => e.domain))].filter((d) => !(this._manifests || {})[d]);
+      if (doms.length) {
+        const list = await hass.callWS({ type: 'manifest/list', integrations: doms }).catch(() => []);
+        this._manifests = { ...(this._manifests || {}), ...Object.fromEntries(list.map((m) => [m.domain, m])) };
+      }
+    } finally {
+      this._sysTs = Date.now(); this._sysBusy = false;
+      if (this._hass) { this._renderStatus(); this._renderLinks(); if (['maint', 'integrations'].includes(this._pop?.key)) this._updatePopup(); }
+    }
+  }
+
+  /** Konfigurationseinträge mit Fehler (nicht deaktiviert) */
+  _entryErrors() {
+    return (this._entries || []).filter((e) => !e.disabled_by && ['setup_error', 'setup_retry', 'migration_error', 'failed_unload'].includes(e.state));
+  }
+
+  /** offene Neustarts: Reparaturmeldungen, die einen Neustart verlangen */
+  _restarts() {
+    return (this._issues || []).filter((i) => !i.dismissed_version && !i.ignored
+      && /restart/i.test(`${i.issue_id} ${i.translation_key || ''}`));
+  }
+
+  _intName(domain) { return this._manifests?.[domain]?.name || (this._entries || []).find((e) => e.domain === domain)?.title || domain; }
+
+  /** überwachte Integrationen: eigene Auswahl oder Integrationen aus Links und Herstellerkarten */
+  _monDomains() {
+    if (Array.isArray(this._monSel)) return this._monSel;
+    const d = new Set([...(this._config.links || []).map((l) => l.integration), ...(this._config.makers || []).map((m) => m.integration)].filter(Boolean));
+    return [...d].sort();
+  }
+
+  _logOf(domain) {
+    const re = new RegExp(`(^|\\.)(components|custom_components)\\.${domain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\.|$)`);
+    return (this._log || []).filter((e) => re.test(e.name || '') || (e.source || []).some((x) => typeof x === 'string' && x.includes(`/${domain}/`)));
+  }
+
+  /** Zustand einer Integration: Einträge, Geräte, Log */
+  _monitor(domain) {
+    const hass = this._hass;
+    const entries = (this._entries || []).filter((e) => e.domain === domain && !e.disabled_by);
+    const bad = entries.filter((e) => ['setup_error', 'setup_retry', 'migration_error', 'failed_unload'].includes(e.state));
+    const devStates = {};
+    for (const e of Object.values(hass.entities || {})) {
+      if (e.platform !== domain || !e.device_id) continue;
+      const st = hass.states[e.entity_id]; if (!st) continue;
+      (devStates[e.device_id] ||= []).push(st);
+    }
+    const devs = Object.keys(devStates).filter((id) => hass.devices[id] && !hass.devices[id].disabled_by);
+    const off = devs.filter((id) => devStates[id].every((s) => s.state === 'unavailable'));
+    const log = this._logOf(domain);
+    const lv = (e) => String(e.level || '').toUpperCase();
+    const TO = /time(d)?[ -]?out|timeouterror|clientconnectorerror|cannot connect|connection (refused|reset|error|lost)|unreachable|not reachable|nicht erreichbar|no route to host|server disconnected|failed to connect/i;
+    const txt = (e) => `${(e.message || []).join(' ')} ${e.exception || ''}`;
+    const errs = log.filter((e) => ['ERROR', 'CRITICAL'].includes(lv(e)));
+    const warns = log.filter((e) => lv(e) === 'WARNING');
+    const timeouts = log.filter((e) => TO.test(txt(e)));
+    const recent = (l) => l.filter((e) => Date.now() / 1000 - (e.timestamp || 0) < 3600);
+    const tcount = timeouts.reduce((a, e) => a + (e.count || 1), 0);
+    let lvl = 0;
+    if (recent(warns).length || recent(timeouts).length || off.length) lvl = 1;
+    if (bad.length || recent(errs).length || (devs.length && off.length === devs.length)) lvl = 2;
+    if (!entries.length) lvl = 2;
+    return { domain, entries, bad, devs, off, log, errs, warns, timeouts, tcount, lvl };
   }
 
   /* ---------- Grundgerüst ---------- */
@@ -9873,7 +9980,7 @@ class HomeDashboardCard extends HTMLElement {
     si('heat', d.heat.length ? 'mdi:radiator' : 'mdi:radiator-off', '#ff6f22', d.heat.length ? 'Heizung aktiv' : 'Heizung aus', d.heat.length, d.heat.length > 0);
     si('open', d.open.length ? 'mdi:window-open-variant' : 'mdi:window-closed-variant', '#2196f3', d.open.length ? 'Fenster offen' : 'Fenster zu', d.open.length, d.open.length > 0);
     si('covers', d.covers.length ? 'mdi:window-shutter-open' : 'mdi:window-shutter', '#9c27b0', d.covers.length ? 'Rollos offen' : 'Rollos zu', d.covers.length, d.covers.length > 0);
-    const maint = d.updates.length + d.battery.length + d.offline.length;
+    const maint = d.updates.length + d.battery.length + d.offline.length + this._entryErrors().length + this._restarts().length;
     si('maint', 'mdi:wrench', '#ffa600', maint ? 'Wartung' : 'Alles ok', maint, maint > 0);
     const v = hass.states[this._config.valve];
     if (v) {
@@ -10067,6 +10174,17 @@ class HomeDashboardCard extends HTMLElement {
     }
     const ids = Object.keys(devs).filter((id) => hass.devices[id] && !hass.devices[id].disabled_by);
     const off = ids.filter((id) => devs[id].every((s) => s.state === 'unavailable')).length;
+    // aktive Geräte: mindestens eine Entität eingeschaltet bzw. in Betrieb
+    const isAct = (st) => {
+      const dom = st.entity_id.split('.')[0]; const s = st.state; const a = st.attributes;
+      return (['switch', 'light', 'fan', 'humidifier', 'siren'].includes(dom) && s === 'on')
+        || (dom === 'climate' && (HEAT.includes(a.hvac_action) || a.hvac_action === 'cooling'))
+        || (dom === 'media_player' && s === 'playing') || (dom === 'vacuum' && s === 'cleaning') || (dom === 'lawn_mower' && s === 'mowing')
+        || (dom === 'camera' && ['recording', 'streaming'].includes(s))
+        || (dom === 'binary_sensor' && ['running', 'power', 'plug'].includes(a.device_class) && s === 'on')
+        || (dom === 'sensor' && /^(running|in_use|programmed|on|active)$/i.test(s) && a.device_class === 'enum');
+    };
+    act = ids.filter((id) => devs[id].some(isAct)).length;
     return (this._lsCache[integration] = { n: ids.length, off, upd, act });
   }
 
@@ -10092,9 +10210,17 @@ class HomeDashboardCard extends HTMLElement {
         else if (s.err) info.push(`<span class="err">${s.err} Fehler</span>`, ...(s.warn ? [`<span class="warn">${s.warn} Warnung${s.warn === 1 ? '' : 'en'}</span>`] : []));
         else info.push(s.warn ? `<span class="warn">${s.warn} Warnung${s.warn === 1 ? '' : 'en'}</span>` : '<span class="ok">keine Fehler</span>');
       }
+      let badge = '';
+      if (l.integration) { const a = this._linkStats(l.integration).act; if (a) badge = `<span class="bdg" title="${a} aktiv">${a}</span>`; }
+      if (l.popup === 'integrations' && this._entries) {
+        const ms = this._monDomains().map((d) => this._monitor(d));
+        const e = ms.filter((m) => m.lvl === 2).length; const w = ms.filter((m) => m.lvl === 1).length;
+        info.push(e ? `<span class="err">${e} gestört</span>` : w ? `<span class="warn">${w} mit Warnungen</span>` : `<span class="ok">${ms.length} ok</span>`);
+        if (e || w) badge = `<span class="bdg ${e ? 'err' : 'warn'}">${e + w}</span>`;
+      } else if (l.popup === 'integrations') info.push('Überwachung');
       if (l.text) info.push(esc(l.text));
       return `<div class="card lk click" data-k="l${i}" data-link="${i}" style="--c:${esc(l.color || 'var(--primary-color)')}">
-        <div class="bub"><ha-icon icon="${esc(l.icon || 'mdi:open-in-app')}"></ha-icon></div>
+        <div class="bub">${badge}<ha-icon icon="${esc(l.icon || 'mdi:open-in-app')}"></ha-icon></div>
         <div class="n"><b>${esc(l.name || l.path)}</b><span>${info.join(' · ')}</span></div><ha-icon icon="mdi:chevron-right"></ha-icon></div>`;
     }).join('');
     this._set('links', html);
@@ -10274,6 +10400,22 @@ class HomeDashboardCard extends HTMLElement {
       } else if (ds.act === 'logx') { if (this._logOpen.has(ds.k)) this._logOpen.delete(ds.k); else this._logOpen.add(ds.k); this._updatePopup();
       } else if (ds.act === 'logr') { this._fetchLog(true);
       } else if (ds.act === 'logall') { this._closePopup(); this._navigate('/config/logs');
+      } else if (ds.act === 'restart') {
+        if (!window.confirm('Home Assistant jetzt neu starten?')) return;
+        await hass.callService('homeassistant', 'restart', {});
+      } else if (ds.act === 'intreload') {
+        await hass.callWS({ type: 'config_entries/reload', entry_id: ds.e });
+        this._fire('hass-notification', { message: `${ds.n} wird neu geladen` });
+        setTimeout(() => this._fetchSys(true), 3000);
+      } else if (ds.act === 'intopen') { this._closePopup(); this._navigate(`/config/integrations/integration/${ds.d}`);
+      } else if (ds.act === 'monx') { if (this._monOpen.has(ds.d)) this._monOpen.delete(ds.d); else this._monOpen.add(ds.d); this._updatePopup();
+      } else if (ds.act === 'monr') { this._fetchSys(true); this._fetchLog(true);
+      } else if (ds.act === 'monedit') { this._monEdit = !this._monEdit; this._monQ = ''; this._updatePopup();
+      } else if (ds.act === 'montog' || ds.act === 'monall') {
+        const sel = new Set(this._monDomains());
+        if (ds.act === 'monall') sel.clear(); else if (sel.has(ds.d)) sel.delete(ds.d); else sel.add(ds.d);
+        this._monSel = [...sel].sort(); this._updatePopup(); this._renderLinks();
+        await hass.callWS({ type: 'frontend/set_user_data', key: 'hmc_integrations', value: this._monSel });
       } else if (ds.act === 'close') this._closePopup();
     } catch (err) {
       this._fire('hass-notification', { message: `Fehler: ${err.message || err}` });
@@ -10319,6 +10461,7 @@ class HomeDashboardCard extends HTMLElement {
     r.querySelector('.bg').addEventListener('input', (e) => {
       const t = e.composedPath()[0];
       if (t && t.dataset && t.dataset.logq != null) { this._logQ = t.value.toLowerCase(); this._updatePopup(); }
+      if (t && t.dataset && t.dataset.monq != null) { this._monQ = t.value; this._updatePopup(); }
     });
     this._escKey = (e) => { if (e.key === 'Escape' && this._pop) this._closePopup(); };
     window.addEventListener('keydown', this._escKey);
@@ -10375,6 +10518,12 @@ class HomeDashboardCard extends HTMLElement {
       this._fetchLog(true);
       clearInterval(this._logTick);
       this._logTick = setInterval(() => this._fetchLog(true), 10000);
+    } else if (kind === 'integrations') {
+      this._monOpen = this._monOpen || new Set(); this._monEdit = false; this._monQ = '';
+      this._popHead('mdi:puzzle-check-outline', '#7e57c2', 'Integrationen', 'Verbindung, Geräte und Fehler', 1000);
+      this._fetchSys(true); this._fetchLog(true);
+      clearInterval(this._logTick);
+      this._logTick = setInterval(() => { this._fetchLog(true); this._fetchSys(true); }, 20000);
     } else if (kind === 'power') {
       const pw = this._config.power;
       this._popEl({ type: 'history-graph', hours_to_show: 24, entities: [pw.house, pw.pv, pw.grid, pw.battery].filter(Boolean).map((e) => ({ entity: e })) })
@@ -10428,13 +10577,73 @@ class HomeDashboardCard extends HTMLElement {
       case 'maint': {
         this._popHead('mdi:wrench', '#ffa600', 'Wartung', '', 620);
         const sec = (t, rows) => (rows.length ? `<div class="sec">${t}</div><div class="lst">${rows.join('')}</div>` : '');
-        const html = sec('Updates', d.updates.map((s) => `<div class="it" data-k="${s.entity_id}" data-more="${s.entity_id}"><ha-icon icon="mdi:package-up" style="--c:#ffa600"></ha-icon>
+        const ST = { setup_error: 'Einrichtung fehlgeschlagen', setup_retry: 'Wiederholt Verbindungsaufbau', migration_error: 'Migration fehlgeschlagen', failed_unload: 'Entladen fehlgeschlagen' };
+        const html = sec('Neustart ausstehend', this._restarts().map((i) => `<div class="it" data-k="r-${esc(i.issue_id)}"><ha-icon icon="mdi:restart-alert" style="--c:#ffa600"></ha-icon>
+            <div class="n">${esc(this._intName(i.domain))}<small>Neustart erforderlich${i.issue_domain && i.issue_domain !== i.domain ? ` · ${esc(this._intName(i.issue_domain))}` : ''}</small></div>
+            <button class="btn" data-act="restart">Neu starten</button></div>`))
+          + sec('Integrationen mit Fehler', this._entryErrors().map((e) => `<div class="it" data-k="e-${esc(e.entry_id)}"><ha-icon icon="mdi:puzzle-remove-outline" style="--c:#db4437"></ha-icon>
+            <div class="n" data-act="intopen" data-d="${esc(e.domain)}" style="cursor:pointer">${esc(e.title)}<small>${esc(this._intName(e.domain))} · ${esc(ST[e.state] || e.state)}${e.reason ? ` · ${esc(e.reason)}` : ''}</small></div>
+            <button class="btn sec" data-act="intreload" data-e="${esc(e.entry_id)}" data-n="${esc(e.title)}">Neu laden</button></div>`))
+          + sec('Updates', d.updates.map((s) => `<div class="it" data-k="${s.entity_id}" data-more="${s.entity_id}"><ha-icon icon="mdi:package-up" style="--c:#ffa600"></ha-icon>
             <div class="n">${esc(this._name(s))}<small>${esc(s.attributes.installed_version || '')} → ${esc(s.attributes.latest_version || '')}</small></div>
             <button class="btn" data-act="install" data-e="${s.entity_id}" data-n="${esc(this._name(s))}">Installieren</button></div>`))
           + sec('Batterien', d.battery.map((s) => this._row(s, fmt(s), 'mdi:battery-alert-variant-outline', '#db4437')))
           + sec('Nicht erreichbar', d.offline.map(({ devId, d: dv }) => `<div class="it" data-k="${esc(devId)}" data-act="device" data-d="${esc(devId)}"><ha-icon icon="mdi:lan-disconnect" style="--c:#db4437"></ha-icon>
             <div class="n">${esc(dv.name_by_user || dv.name)}<small>${esc([hass.areas[dv.area_id]?.name, dv.manufacturer, dv.model].filter(Boolean).join(' · '))}</small></div></div>`));
         return html || '<div class="none">Nichts zu tun.</div>';
+      }
+      case 'integrations': {
+        if (!this._entries) return '<div class="none">Lädt …</div>';
+        if (this._monEdit) {
+          const sel = new Set(this._monDomains());
+          const q = (this._monQ || '').toLowerCase();
+          const doms = [...new Set(this._entries.map((e) => e.domain))].map((d) => ({ d, n: this._intName(d) }))
+            .filter((x) => !q || `${x.d} ${x.n}`.toLowerCase().includes(q)).sort((a, b) => a.n.localeCompare(b.n, 'de'));
+          return `<div class="lbar"><input class="lq" data-monq placeholder="Integration suchen …" type="search">
+              <button class="btn sec" data-act="monall" data-v="0">Keine</button><button class="btn" data-act="monedit">Fertig</button></div>
+            <div class="linf">${sel.size} ausgewählt · die Auswahl wird für deinen Benutzer gespeichert</div>
+            <div class="msel">${doms.map((x) => `<label class="mchk ${sel.has(x.d) ? 'on' : ''}" data-act="montog" data-d="${esc(x.d)}" data-k="m-${esc(x.d)}">
+              <ha-icon icon="${sel.has(x.d) ? 'mdi:checkbox-marked' : 'mdi:checkbox-blank-outline'}"></ha-icon><span>${esc(x.n)}<small>${esc(x.d)}</small></span></label>`).join('')}</div>`;
+        }
+        const ST = { loaded: 'verbunden', setup_error: 'Einrichtung fehlgeschlagen', setup_retry: 'versucht erneut zu verbinden', migration_error: 'Migration fehlgeschlagen',
+          failed_unload: 'Entladen fehlgeschlagen', not_loaded: 'nicht geladen', setup_in_progress: 'wird eingerichtet' };
+        const ms = this._monDomains().map((d) => this._monitor(d)).sort((a, b) => b.lvl - a.lvl || this._intName(a.domain).localeCompare(this._intName(b.domain), 'de'));
+        const C = ['#4caf50', '#ff9800', '#f44336'];
+        const ts = (t) => (t ? new Date(t * 1000).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '');
+        const bar = `<div class="lbar"><span class="linf" style="margin:0;flex:1">${ms.filter((m) => m.lvl === 2).length} gestört · ${ms.filter((m) => m.lvl === 1).length} mit Warnungen · ${ms.filter((m) => !m.lvl).length} ok
+            · Stand ${this._sysTs ? new Date(this._sysTs).toLocaleTimeString('de-DE') : '–'}</span>
+          <button class="btn sec" data-act="monr" title="Neu laden">↻</button><button class="btn sec" data-act="monedit">Auswahl bearbeiten</button></div>`;
+        if (!ms.length) return `${bar}<div class="none">Keine Integrationen ausgewählt.</div>`;
+        return bar + `<div class="lst">${ms.map((m) => {
+          const name = this._intName(m.domain);
+          const open = this._monOpen.has(m.domain);
+          const chips = [];
+          if (!m.entries.length) chips.push('<span class="ch err">nicht eingerichtet</span>');
+          else if (m.bad.length) chips.push(`<span class="ch err">${esc(ST[m.bad[0].state] || m.bad[0].state)}</span>`);
+          else chips.push(`<span class="ch ok">${m.entries.length > 1 ? `${m.entries.length} Einträge ` : ''}verbunden</span>`);
+          if (m.devs.length) chips.push(m.off.length ? `<span class="ch ${m.off.length === m.devs.length ? 'err' : 'warn'}">${m.off.length} von ${m.devs.length} Geräten offline</span>` : `<span class="ch">${m.devs.length} Geräte online</span>`);
+          if (m.tcount) chips.push(`<span class="ch warn">${m.tcount}× Timeout/Verbindung</span>`);
+          if (m.errs.length) chips.push(`<span class="ch err">${m.errs.length} Fehler</span>`);
+          if (m.warns.length) chips.push(`<span class="ch warn">${m.warns.length} Warnung${m.warns.length === 1 ? '' : 'en'}</span>`);
+          const last = m.log[0];
+          let det = '';
+          if (open) {
+            const eRows = m.entries.map((e) => `<div class="mrow"><ha-icon icon="mdi:link-variant" style="color:${['loaded'].includes(e.state) ? C[0] : C[2]}"></ha-icon>
+              <span>${esc(e.title)} · ${esc(ST[e.state] || e.state)}${e.reason ? ` · ${esc(e.reason)}` : ''}</span>
+              <button class="btn sec" data-act="intreload" data-e="${esc(e.entry_id)}" data-n="${esc(e.title)}">Neu laden</button></div>`).join('');
+            const oRows = m.off.map((id) => { const dv = this._hass.devices[id]; return `<div class="mrow click" data-act="device" data-d="${esc(id)}"><ha-icon icon="mdi:lan-disconnect" style="color:${C[2]}"></ha-icon>
+              <span>${esc(dv.name_by_user || dv.name)}${dv.area_id && this._hass.areas[dv.area_id] ? ` · ${esc(this._hass.areas[dv.area_id].name)}` : ''}</span></div>`; }).join('');
+            const lRows = m.log.slice(0, 8).map((e) => `<div class="mrow"><span class="mlv" style="color:${String(e.level).toUpperCase() === 'WARNING' ? C[1] : C[2]}">${esc(String(e.level || '').slice(0, 1))}</span>
+              <span>${esc((e.message || [])[0] || '')}<small>${esc(ts(e.timestamp))}${e.count > 1 ? ` · ${e.count}×` : ''}</small></span></div>`).join('');
+            det = `<div class="mdet">${eRows ? `<div class="msub">Verbindung</div>${eRows}` : ''}${oRows ? `<div class="msub">Offline</div>${oRows}` : ''}
+              ${lRows ? `<div class="msub">Log</div>${lRows}` : '<div class="msub">Log</div><div class="mrow"><span>Keine Fehler oder Warnungen im Log.</span></div>'}
+              <div class="acts" style="margin-top:8px"><button class="btn sec" data-act="intopen" data-d="${esc(m.domain)}">Integration öffnen</button></div></div>`;
+          }
+          return `<div class="mi" data-k="mi-${esc(m.domain)}" style="--c:${C[m.lvl]}">
+            <div class="mh" data-act="monx" data-d="${esc(m.domain)}"><span class="dot"></span><div class="n">${esc(name)}
+              ${last && !open ? `<small>${esc(ts(last.timestamp))} · ${esc(((last.message || [])[0] || '').slice(0, 140))}</small>` : ''}</div>
+              <div class="chs">${chips.join('')}</div><ha-icon icon="mdi:chevron-${open ? 'up' : 'down'}"></ha-icon></div>${det}</div>`;
+        }).join('')}</div>`;
       }
       case 'log': {
         const lv = (e) => String(e.level || '').toUpperCase();
@@ -10496,4 +10705,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.3.2 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.4.0 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');

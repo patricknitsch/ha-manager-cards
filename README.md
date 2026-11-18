@@ -95,3 +95,18 @@ sequence:
     response_variable: ergebnis
 ```
 
+
+## Start-Dashboard: Integrationen überwachen
+
+Ein Link mit `popup: integrations` öffnet die Überwachung der Integrationen: Verbindungsstatus der Konfigurationseinträge,
+Geräte offline, Fehler, Warnungen und Timeouts aus dem Systemprotokoll. Welche Integrationen überwacht werden,
+wählst du im Popup unter „Auswahl bearbeiten“; die Auswahl wird je Benutzer in Home Assistant gespeichert.
+Ohne eigene Auswahl werden die Integrationen aus `links` und `makers` überwacht. Nur für Administratoren.
+
+```yaml
+links:
+  - { name: Integrationen, icon: mdi:puzzle-check-outline, color: "#7e57c2", popup: integrations }
+```
+
+Die Wartung zeigt zusätzlich Integrationen mit Fehler (mit „Neu laden“) und ausstehende Neustarts.
+Links zu Integrationen tragen am Icon die Anzahl aktiver Geräte (eingeschaltet bzw. in Betrieb).
