@@ -17,7 +17,7 @@
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  */
 {
-const VERSION = '2.4.0';
+const VERSION = '2.4.1';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -447,7 +447,11 @@ class HomeDashboardCard extends HTMLElement {
 
   _logOf(domain) {
     const re = new RegExp(`(^|\\.)(components|custom_components)\\.${domain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\.|$)`);
-    return (this._log || []).filter((e) => re.test(e.name || '') || (e.source || []).some((x) => typeof x === 'string' && x.includes(`/${domain}/`)));
+    // Bibliotheken, die unter eigenem Logger-Namen schreiben, ihrer Integration zuordnen
+    const LIBS = { aioesphomeapi: 'esphome', aioshelly: 'shelly', hatasmota: 'tasmota', proxmoxer: 'proxmoxve', hole: 'pi_hole',
+      pymiele: 'miele_lan', pysenec: 'senec', reolink_aio: 'reolink', ...(this._config.log_libraries || {}) };
+    return (this._log || []).filter((e) => re.test(e.name || '') || LIBS[String(e.name || '').split('.')[0]] === domain
+      || (e.source || []).some((x) => typeof x === 'string' && x.includes(`/${domain}/`)));
   }
 
   /** Zustand einer Integration: Einträge, Geräte, Log */

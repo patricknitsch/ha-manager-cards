@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.5.0 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.5.1 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== esphome-manager-card.js ===== */
 {
@@ -9360,7 +9360,7 @@ if (!customElements.get('home-summary-card')) {
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  */
 {
-const VERSION = '2.4.0';
+const VERSION = '2.4.1';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -9790,7 +9790,11 @@ class HomeDashboardCard extends HTMLElement {
 
   _logOf(domain) {
     const re = new RegExp(`(^|\\.)(components|custom_components)\\.${domain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\.|$)`);
-    return (this._log || []).filter((e) => re.test(e.name || '') || (e.source || []).some((x) => typeof x === 'string' && x.includes(`/${domain}/`)));
+    // Bibliotheken, die unter eigenem Logger-Namen schreiben, ihrer Integration zuordnen
+    const LIBS = { aioesphomeapi: 'esphome', aioshelly: 'shelly', hatasmota: 'tasmota', proxmoxer: 'proxmoxve', hole: 'pi_hole',
+      pymiele: 'miele_lan', pysenec: 'senec', reolink_aio: 'reolink', ...(this._config.log_libraries || {}) };
+    return (this._log || []).filter((e) => re.test(e.name || '') || LIBS[String(e.name || '').split('.')[0]] === domain
+      || (e.source || []).some((x) => typeof x === 'string' && x.includes(`/${domain}/`)));
   }
 
   /** Zustand einer Integration: Einträge, Geräte, Log */
@@ -10722,4 +10726,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.5.0 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.5.1 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');

@@ -133,13 +133,18 @@ automation:
         event_type: system_log_event
     variables:
       quelle: "{{ trigger.event.data.name | default('') }}"
+      # Integration aus dem Logger-Namen; Bibliotheken (z. B. aioesphomeapi) werden ihrer Integration zugeordnet
       dom: >-
-        {{ quelle | regex_findall_index('(?:components|custom_components)\.([a-z0-9_]+)', 0)
-           if quelle is search('(?:components|custom_components)\.[a-z0-9_]+') else '' }}
+        {%- set libs = {'aioesphomeapi': 'esphome', 'aioshelly': 'shelly', 'hatasmota': 'tasmota', 'proxmoxer': 'proxmoxve', 'hole': 'pi_hole', 'pymiele': 'miele_lan', 'pysenec': 'senec', 'reolink_aio': 'reolink'} -%}
+        {%- if quelle is search('(?:components|custom_components)\.[a-z0-9_]+') -%}
+          {{ quelle | regex_findall_index('(?:components|custom_components)\.([a-z0-9_]+)', 0) }}
+        {%- else -%}
+          {{ libs.get(quelle.split('.')[0], '') }}
+        {%- endif -%}
       text: >-
         {{ (trigger.event.data.message | default([]) | join(' ')) ~ ' ' ~ (trigger.event.data.exception | default('')) }}
       verbindung: >-
-        {{ text is search('time(d)?[ -]?out|TimeoutError|ClientConnectorError|cannot connect|connection (refused|reset|error|lost|aborted)|unreachable|nicht erreichbar|no route to host|server disconnected|failed to connect|Error fetching|Error requesting|update failed', ignorecase=True) }}
+        {{ text is search('time(d)?[ -]?out|TimeoutError|ClientConnectorError|cannot connect|can.t connect|connect call failed|connection (refused|reset|error|lost|aborted)|unreachable|nicht erreichbar|no route to host|server disconnected|failed to connect|Error fetching|Error requesting|update failed', ignorecase=True) }}
       # Sperrliste „domain=zeitstempel;…“ der zuletzt gemeldeten Integrationen
       sperre: >-
         {%- set ns = namespace(d={}) -%}
