@@ -115,3 +115,10 @@ Das Paket dazu liegt unter [`examples/integrationen_ueberwachung.yaml`](examples
 
 Die Wartung zeigt zusätzlich Integrationen mit Fehler (mit „Neu laden“) und ausstehende Neustarts.
 Links zu Integrationen tragen am Icon die Anzahl aktiver Geräte (eingeschaltet bzw. in Betrieb).
+
+## Start-Dashboard: Benutzer ohne Administratorrechte
+
+- Die Begrüßung und das Bild oben zeigen den angemeldeten Benutzer (seine Person, sonst seinen Namen).
+- `admin_only: [pi_hole, proxmoxve, xsense]` blendet diese Integrationen für normale Benutzer komplett aus:
+  Links, Geräte in den Räumen und Raum-Popups, Kameras sowie die Zähler oben (Wartung, Batterien, offline).
+- `admin: true` an einem Link zeigt ihn nur Administratoren. HA-Log und Integrationen sind immer nur für Administratoren.

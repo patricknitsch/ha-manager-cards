@@ -15,9 +15,11 @@
  *   hide_label: dashboard_ausgeblendet    # per Label ausgeblendete Geräte zählen nicht mit
  *   links: [{ name, icon, path, color, integration, entity }]
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
+ *   admin_only: [pi_hole, proxmoxve, xsense]   # Integrationen nur für Administratoren (Links, Räume, Zähler)
+ *   links: [{ …, admin: true }]                # einzelnen Link nur Administratoren zeigen
  */
 {
-const VERSION = '2.4.2';
+const VERSION = '2.5.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -356,6 +358,7 @@ class HomeDashboardCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     HIDE.sync(hass);
+    HIDE.restrict(hass, this._config.admin_only || []);
     this._render();
     if (this._pop) this._updatePopup();
     if (this._camPop) for (const c of this._camPop.els) c.hass = hass;
@@ -628,14 +631,19 @@ class HomeDashboardCard extends HTMLElement {
     if (!hass) return;
     const now = new Date();
     const h = now.getHours();
-    const p = hass.states[this._config.person];
+    // Person des angemeldeten Benutzers; die konfigurierte Person nur, wenn sie zu ihm gehört oder kein Benutzer bekannt ist
+    const persons = Object.values(hass.states).filter((s) => s.entity_id.startsWith('person.'));
+    const conf = hass.states[this._config.person];
+    const p = (hass.user && persons.find((s) => s.attributes.user_id === hass.user.id))
+      || (!hass.user || conf?.attributes.user_id === hass.user?.id ? conf : null);
+    this._personId = p?.entity_id || '';
     const first = (p?.attributes.friendly_name || hass.user?.name || '').split(' ')[0];
     const greet = `${h < 11 ? 'Guten Morgen' : h < 18 ? 'Guten Tag' : 'Guten Abend'}${first ? `, ${first}` : ''}`;
     const w = hass.states[this._config.weather];
     const pic = p?.attributes.entity_picture;
     const t = w?.attributes.temperature;
     const html = `<div class="hdr">
-      <div class="av ${p && p.state !== 'home' ? 'away' : ''}" data-more="${esc(this._config.person || '')}" ${pic ? `style="background-image:url('${esc(pic)}')"` : ''}>${pic ? '' : '<ha-icon icon="mdi:account"></ha-icon>'}</div>
+      <div class="av ${p && p.state !== 'home' ? 'away' : ''}" data-more="${esc(this._personId)}" ${pic ? `style="background-image:url('${esc(pic)}')"` : ''}>${pic ? '' : '<ha-icon icon="mdi:account"></ha-icon>'}</div>
       <div class="greet"><div class="gl"><div class="g">${esc(greet)}</div>
         ${w ? `<div class="wx" data-more="${esc(this._config.weather)}" title="${esc(w.attributes.friendly_name || '')}"><ha-icon icon="${WX[w.state] || 'mdi:weather-cloudy'}"></ha-icon><span>${t != null ? `${nf(t)}°` : '–'}</span></div>` : ''}</div><div class="s">${esc(now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }))} · <span class="tm">${now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr</span></div></div></div>`;
     this._set('hdr', html);
@@ -863,6 +871,9 @@ class HomeDashboardCard extends HTMLElement {
   _renderLinks() {
     const hass = this._hass;
     const html = (this._config.links || []).map((l, i) => {
+      // Nur für Administratoren: admin: true, Log- und Integrations-Popup, Integrationen aus admin_only
+      if (!hass.user?.is_admin && (l.admin || ['log', 'integrations'].includes(l.popup)
+        || (l.integration && (this._config.admin_only || []).includes(l.integration)))) return '';
       // Links zu Integrationen ohne Geräte (nicht installiert) ausblenden, außer show_empty: true
       if (l.integration && !l.show_empty && !this._linkStats(l.integration).n) return '';
       const info = [];
@@ -940,7 +951,7 @@ class HomeDashboardCard extends HTMLElement {
   _areaCams(areaId) {
     const hass = this._hass;
     const ids = Object.values(hass.entities || {})
-      .filter((e) => e.entity_id.startsWith('camera.') && (e.area_id || (e.device_id && hass.devices[e.device_id]?.area_id)) === areaId)
+      .filter((e) => e.entity_id.startsWith('camera.') && !HIDE.restricted(e) && (e.area_id || (e.device_id && hass.devices[e.device_id]?.area_id)) === areaId)
       .map((e) => e.entity_id).sort();
     return [...new Set([this._config.cameras[areaId], ...ids])].filter((id) => id && hass.states[id]);
   }
@@ -1192,7 +1203,7 @@ class HomeDashboardCard extends HTMLElement {
         [c.temp != null && `${nf(c.temp)} °C`, c.hum != null && `${nf(c.hum, 0)} %`, pv != null && fW(pv)].filter(Boolean).join(' · '), 1280);
       const el = document.createElement('area-overview-card');
       el.setConfig({ mode: 'devices', makers: this._config.makers, power: this._config.area_power, cameras: this._config.cameras,
-        min_width: 300, hide_label: this._config.hide_label });
+        min_width: 300, hide_label: this._config.hide_label, admin_only: this._config.admin_only || [] });
       el._area = arg;
       this._popEl(el);
     } else if (kind === 'log') {
