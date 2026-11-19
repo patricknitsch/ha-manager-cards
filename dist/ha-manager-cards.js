@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.6.1 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.7.0 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== esphome-manager-card.js ===== */
 {
@@ -10889,4 +10889,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.6.1 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.7.0 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
