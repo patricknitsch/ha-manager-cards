@@ -9379,9 +9379,16 @@ if (!customElements.get('home-summary-card')) {
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  *   admin_only: [pi_hole, proxmoxve, xsense]   # Integrationen nur für Administratoren (Links, Räume, Zähler)
  *   links: [{ …, admin: true }]                # einzelnen Link nur Administratoren zeigen
+ *   active_popup:                              # Popup „Gerade aktiv“ beim Öffnen (false = nur über die Statuskachel)
+ *     show: load                               # load (je Seitenaufruf) | session (je Browser-Sitzung) | always | never
+ *     min_power: 5                             # W, ab der eine Messdose als aktiv gilt
+ *     power_devices: [kühlschrank]             # weitere Geräte mit Leistungsmessung (Namensteil)
+ *     exclude: [router]                        # Geräte nie anzeigen (Namensteil oder entity_id)
+ *     exclude_integrations: [frigate, …]       # ersetzt die Standardliste
+ *     groups: [{ name: Küche, icon: mdi:stove, color: '#795548', match: 'herd|backofen|kochfeld' }]
  */
 {
-const VERSION = '2.5.1';
+const VERSION = '2.6.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -9395,7 +9402,20 @@ const WX = {
   partlycloudy: 'mdi:weather-partly-cloudy', pouring: 'mdi:weather-pouring', rainy: 'mdi:weather-rainy', snowy: 'mdi:weather-snowy',
   'snowy-rainy': 'mdi:weather-snowy-rainy', sunny: 'mdi:weather-sunny', windy: 'mdi:weather-windy', 'windy-variant': 'mdi:weather-windy-variant',
 };
-const DWD_COLOR = ['var(--disabled-color, #9e9e9e)', '#ffeb3b', '#ff9800', '#f44336', '#9c27b0'];
+// Popup „Gerade aktiv“: Zuordnung über Art (kind) oder Gerätename (match); eigene Gruppen in active_popup.groups kommen zuerst
+const ACT_GROUPS = [
+  { name: 'Heizung', icon: 'mdi:radiator', color: '#ff6f22', kind: 'heat' },
+  { name: 'Wasser', icon: 'mdi:water-boiler', color: '#2196f3', kind: 'water' },
+  { name: 'Wasser', icon: 'mdi:water-boiler', color: '#2196f3', match: 'wasser|boiler|bewässer|pumpe|zisterne|grohe|dusch|zirkulation' },
+  { name: 'Heizung', icon: 'mdi:radiator', color: '#ff6f22', match: 'heiz|thermostat|radiator|wärme|infrarot' },
+  { name: 'Medien', icon: 'mdi:play-circle', color: '#9c27b0', kind: 'media' },
+  { name: 'Geräte', icon: 'mdi:power-plug', color: '#4caf50', kind: 'dev' },
+  { name: 'Licht', icon: 'mdi:lightbulb-on', color: '#ffc107', kind: 'light' },
+];
+// Integrationen ohne „Verbraucher“: Infrastruktur, Kameras, Erzeugung/Speicher
+const ACT_EXCL = ['frigate', 'reolink', 'pi_hole', 'proxmoxve', 'senec', 'solectrus', 'kostal_plenticore', 'unifi', 'xsense', 'hacs', 'hassio',
+  'sun', 'backup', 'mobile_app', 'telegram_bot', 'esphome_dashboard', 'iobroker', 'mqtt_statestream', 'speedtestdotnet', 'fritz', 'fritzbox_callmonitor'];
+const DWD_COLOR =['var(--disabled-color, #9e9e9e)', '#ffeb3b', '#ff9800', '#f44336', '#9c27b0'];
 const DWD_TEXT = ['keine Warnung', 'Wetterwarnung', 'Markantes Wetter', 'Unwetterwarnung', 'Extremes Unwetter'];
 
 /* DOM abgleichen statt neu aufbauen (verhindert Flackern). Knoten mit data-keep behalten ihren Inhalt. */
@@ -9452,7 +9472,7 @@ const HIDE = window.__aocHideStore = Object.assign(window.__aocHideStore || {
       .finally(() => { this.busy = false; });
   },
   /** Entität (Registry-Eintrag) ausgeblendet – direkt oder über ihr Gerät */
-  hidden(e) { return !!e && ((e.device_id && this.ids.has(e.device_id)) || (this.ents && this.ents.has(e.entity_id))); },
+  hidden(e) { return !!e && ((e.device_id && this.ids.has(e.device_id)) || (this.ents && this.ents.has(e.entity_id)) || (!!this.restricted && this.restricted(e))); },
   async set(hass, id, hide) {
     let cur = hass.devices[id]?.labels;
     if (!Array.isArray(cur)) cur = ((await hass.callWS({ type: 'config/device_registry/list' })).find((d) => d.id === id) || {}).labels || [];
@@ -9728,6 +9748,7 @@ class HomeDashboardCard extends HTMLElement {
     if (!this._fcTs) this._fetchForecast();
     if (!this._logTs) this._fetchLog();
     if (!this._sysTs) this._fetchSys();
+    this._autoActive();
   }
 
   /* ---------- Home-Assistant-Log (Systemprotokoll, nur Admins) ---------- */
@@ -9936,6 +9957,103 @@ class HomeDashboardCard extends HTMLElement {
     return out;
   }
 
+  /** Optionen des Popups „Gerade aktiv“ (active_popup: false schaltet das automatische Öffnen ab) */
+  _apCfg() {
+    const c = this._config.active_popup;
+    const o = c && typeof c === 'object' ? c : {};
+    return {
+      show: c === false ? 'never' : o.show || 'load',
+      min_power: o.min_power ?? 5,
+      exclude_integrations: o.exclude_integrations || ACT_EXCL,
+      exclude: (o.exclude || []).map((x) => String(x).toLowerCase()),
+      power_devices: (o.power_devices || []).map((x) => String(x).toLowerCase()),
+      groups: [...(o.groups || []), ...ACT_GROUPS],
+    };
+  }
+
+  /** aktive Geräte, je Gerät ein Eintrag, nach Gruppen (Heizung, Wasser, Geräte, Medien, Licht) */
+  _active() {
+    const hass = this._hass;
+    if (this._acFor === hass.states && this._acEnt === hass.entities && this._acHide === HIDE.ver) return this._ac;
+    this._acFor = hass.states; this._acEnt = hass.entities; this._acHide = HIDE.ver;
+    const cfg = this._apCfg();
+    const units = { W: 1, kW: 1000, MW: 1e6 };
+    const byDev = {};
+    for (const e of Object.values(hass.entities || {})) {
+      if (e.hidden || e.entity_category || HIDE.hidden(e) || cfg.exclude_integrations.includes(e.platform)) continue;
+      if (e.entity_id === this._config.valve) continue; // Hauptventil ist normalerweise offen
+      const st = hass.states[e.entity_id];
+      if (!st || BAD.includes(st.state)) continue;
+      const dv = e.device_id && hass.devices[e.device_id];
+      if (dv && (dv.disabled_by || HIDE.restrictedDev?.(e.device_id))) continue;
+      const k = dv ? e.device_id : e.entity_id;
+      (byDev[k] ||= { dv, sts: [] }).sts.push(st);
+    }
+    const items = [];
+    for (const [k, { dv, sts }] of Object.entries(byDev)) {
+      const name = dv ? dv.name_by_user || dv.name : this._name(sts[0]);
+      const low = `${name} ${sts.map((s) => this._name(s)).join(' ')}`.toLowerCase();
+      if (cfg.exclude.some((x) => low.includes(x) || sts.some((s) => s.entity_id === x))) continue;
+      const of = (dom) => sts.filter((s) => s.entity_id.startsWith(`${dom}.`));
+      const why = []; let main = null; let kind = null; let tog = null;
+      const hit = (st, text, k2) => { why.push(text); main ||= st; kind ||= k2; };
+      for (const s of of('climate')) if (HEAT.includes(s.attributes.hvac_action)) {
+        const a = s.attributes;
+        hit(s, `${a.hvac_action === 'cooling' ? 'kühlt' : 'heizt'}${a.current_temperature != null ? ` · ${nf(a.current_temperature)} °C` : ''}${a.temperature != null ? ` → ${nf(a.temperature)} °C` : ''}`, 'heat');
+      }
+      for (const s of of('water_heater')) if (s.state !== 'off') hit(s, 'in Betrieb', 'water');
+      for (const s of of('valve')) if (['open', 'opening'].includes(s.state)) hit(s, 'Ventil offen', 'water');
+      for (const s of of('vacuum')) if (s.state === 'cleaning') hit(s, 'saugt', 'dev');
+      for (const s of of('lawn_mower')) if (s.state === 'mowing') hit(s, 'mäht', 'dev');
+      for (const s of of('media_player')) if (s.state === 'playing') hit(s, s.attributes.media_title ? `spielt · ${s.attributes.media_title}` : 'Wiedergabe', 'media');
+      for (const s of of('binary_sensor')) if (['running', 'power', 'plug'].includes(s.attributes.device_class) && s.state === 'on') hit(s, 'läuft', 'dev');
+      for (const s of of('sensor')) if (s.attributes.device_class === 'enum' && /^(running|in_use|programmed|active)$/i.test(s.state)) hit(s, typeof hass.formatEntityState === 'function' ? hass.formatEntityState(s) : s.state, 'dev');
+      // Leistung: Messdosen, schaltbare Steckdosen und ausdrücklich genannte Geräte
+      const pw = of('sensor').filter((s) => s.attributes.device_class === 'power' && units[s.attributes.unit_of_measurement] && num(s) != null);
+      const watt = pw.length ? Math.max(...pw.map((s) => num(s) * units[s.attributes.unit_of_measurement])) : null;
+      const sw = of('switch');
+      const pwDev = pw.length && (sw.length || /messdose|steckdose|zwischenstecker|plug|socket/.test(low) || cfg.power_devices.some((x) => low.includes(x)));
+      if (pwDev && watt >= cfg.min_power) hit(pw.find((s) => num(s) * units[s.attributes.unit_of_measurement] === watt), 'aktiv', 'dev');
+      // Schalter ohne Leistungsmessung: eingeschaltet = aktiv
+      if (!pwDev) for (const s of sw) if (s.state === 'on') { hit(s, 'eingeschaltet', 'dev'); tog ||= s; }
+      for (const s of of('fan')) if (s.state === 'on') { hit(s, 'läuft', 'dev'); tog ||= s; }
+      const lights = of('light').filter((s) => s.state === 'on');
+      if (lights.length && !why.length) { hit(lights[0], lights.length > 1 ? `${lights.length} Lichter an` : 'an', 'light'); tog = lights[0]; }
+      if (!main) continue;
+      if (pwDev && sw.length === 1) tog ||= sw[0];
+      if (kind === 'light') tog = lights.length === 1 ? lights[0] : null;
+      const area = (dv && hass.areas[dv.area_id]?.name) || this._areaOf(main.entity_id);
+      const grp = cfg.groups.find((g) => (g.kind && g.kind === kind) || (g.match && kind === 'dev' && new RegExp(g.match, 'i').test(low)))
+        || ACT_GROUPS.find((g) => g.kind === 'dev');
+      items.push({ k, name, area, grp, why: [...new Set(why)].join(' · '), watt, main, tog: tog && ['on', 'off'].includes(tog.state) ? tog : null });
+    }
+    const groups = [];
+    for (const g of cfg.groups) {
+      if (groups.some((x) => x.name === g.name)) continue;
+      const its = items.filter((i) => i.grp.name === g.name)
+        .sort((a, b) => (b.watt ?? -1) - (a.watt ?? -1) || a.area.localeCompare(b.area, 'de') || a.name.localeCompare(b.name, 'de'));
+      if (its.length) groups.push({ ...g, items: its });
+    }
+    this._ac = { n: items.length, groups };
+    return this._ac;
+  }
+
+  /** Popup „Gerade aktiv“ beim Öffnen des Dashboards (show: load | session | always | never) */
+  _autoActive() {
+    const show = this._apCfg().show;
+    if (show === 'never' || this._apDone || !this._hass?.entities || !Object.keys(this._hass.entities).length) return;
+    if (show === 'load' && window.__hmcActiveShown) { this._apDone = true; return; }
+    if (show === 'session') { try { if (sessionStorage.getItem('hmc-active-shown')) { this._apDone = true; return; } } catch (e) { /* kein Speicher */ } }
+    this._apDone = true;
+    // kurz warten, bis die Zustände vollständig da sind
+    setTimeout(() => {
+      if (!this.isConnected || this._pop || !this._active().n) return;
+      window.__hmcActiveShown = true;
+      try { sessionStorage.setItem('hmc-active-shown', '1'); } catch (e) { /* kein Speicher */ }
+      this._openPopup('active');
+    }, 1500);
+  }
+
   _warnings() {
     const out = [];
     const SEV = { minor: 1, moderate: 2, severe: 3, extreme: 4 };
@@ -10022,6 +10140,7 @@ class HomeDashboardCard extends HTMLElement {
     si('heat', d.heat.length ? 'mdi:radiator' : 'mdi:radiator-off', '#ff6f22', d.heat.length ? 'Heizung aktiv' : 'Heizung aus', d.heat.length, d.heat.length > 0);
     si('open', d.open.length ? 'mdi:window-open-variant' : 'mdi:window-closed-variant', '#2196f3', d.open.length ? 'Fenster offen' : 'Fenster zu', d.open.length, d.open.length > 0);
     si('covers', d.covers.length ? 'mdi:window-shutter-open' : 'mdi:window-shutter', '#9c27b0', d.covers.length ? 'Rollos offen' : 'Rollos zu', d.covers.length, d.covers.length > 0);
+    { const n = this._active().n; si('active', n ? 'mdi:power-plug' : 'mdi:power-plug-off-outline', '#4caf50', n ? 'Aktiv' : 'Nichts aktiv', n, n > 0); }
     const maint = d.updates.length + d.battery.length + d.offline.length + this._entryErrors().length + this._restarts().length;
     si('maint', 'mdi:wrench', '#ffa600', maint ? 'Wartung' : 'Alles ok', maint, maint > 0);
     const v = hass.states[this._config.valve];
@@ -10624,6 +10743,15 @@ class HomeDashboardCard extends HTMLElement {
           const on = HEAT.includes(s.attributes.hvac_action);
           return this._row(s, `${cur != null ? `${nf(cur)} °C` : ''}${t != null ? ` → ${nf(t)} °C` : ''}`, on ? 'mdi:radiator' : 'mdi:radiator-off', on ? '#ff6f22' : '');
         }));
+      case 'active': {
+        const ac = this._active();
+        this._popHead('mdi:power-plug', '#4caf50', 'Gerade aktiv', ac.n ? `${ac.n} Gerät${ac.n === 1 ? '' : 'e'} in Betrieb` : 'nichts in Betrieb', 640);
+        if (!ac.n) return '<div class="none">Gerade ist nichts in Betrieb.</div>';
+        return ac.groups.map((g) => `<div class="sec" style="--c:${esc(g.color)}"><ha-icon icon="${esc(g.icon)}" style="color:${esc(g.color)};--mdc-icon-size:18px"></ha-icon> ${esc(g.name)} <small>${g.items.length}</small></div>
+          <div class="lst">${g.items.map((i) => `<div class="it" data-k="ac-${esc(i.k)}" data-more="${esc(i.main.entity_id)}" style="--c:${esc(g.color)}"><ha-icon icon="${esc(i.main.attributes.icon || g.icon)}"></ha-icon>
+            <div class="n">${esc(i.name)}<small>${esc([i.area, i.why].filter(Boolean).join(' · '))}</small></div>
+            <span class="v" style="display:flex;align-items:center;gap:12px">${i.watt != null && i.watt >= 1 ? fW(i.watt) : ''}${i.tog ? tog(i.tog) : ''}</span></div>`).join('')}</div>`).join('');
+      }
       case 'open':
         this._popHead('mdi:window-open-variant', '#2196f3', 'Fenster & Türen', `${d.open.length} offen`, 520);
         return list(byArea(d.open).map((s) => this._row(s, 'offen', 'mdi:window-open-variant', '#2196f3')));
