@@ -19,7 +19,7 @@
  *   links: [{ …, admin: true }]                # einzelnen Link nur Administratoren zeigen
  *   active_popup:                              # Popup „Gerade aktiv“ beim Öffnen (false = nur über die Statuskachel)
  *     show: load                               # load (je Seitenaufruf) | session (je Browser-Sitzung) | always | never
- *     min_power: 5                             # W, ab der eine Messdose als aktiv gilt
+ *     min_power: 10                            # W, ab der eine Messdose als aktiv gilt
  *     power_devices: [kühlschrank]             # weitere Geräte mit Leistungsmessung (Namensteil)
  *     exclude: [router]                        # Geräte nie anzeigen (Namensteil oder entity_id)
  *     exclude_integrations: [frigate, …]       # ersetzt die Standardliste
@@ -50,9 +50,11 @@ const ACT_GROUPS = [
   { name: 'Geräte', icon: 'mdi:power-plug', color: '#4caf50', kind: 'dev' },
   { name: 'Licht', icon: 'mdi:lightbulb-on', color: '#ffc107', kind: 'light' },
 ];
+// Schalter, die eine Last schalten (Gerät ohne Leistungsmessung)
+const ACT_LOAD = /schaltdose|steckdose|zwischenstecker|relais|relay|plug|socket|outlet|beleuchtung|licht|lampe|pumpe|lüfter|luefter|ventilator|heizlüfter/i;
 // Integrationen ohne „Verbraucher“: Infrastruktur, Kameras, Erzeugung/Speicher
 const ACT_EXCL = ['frigate', 'reolink', 'pi_hole', 'proxmoxve', 'senec', 'solectrus', 'kostal_plenticore', 'unifi', 'xsense', 'hacs', 'hassio',
-  'sun', 'backup', 'mobile_app', 'telegram_bot', 'esphome_dashboard', 'iobroker', 'mqtt_statestream', 'speedtestdotnet', 'fritz', 'fritzbox_callmonitor'];
+  'sun', 'backup', 'mobile_app', 'telegram_bot', 'tapo_control', 'tapo', 'ha_mcp_tools', 'esphome_dashboard', 'iobroker', 'mqtt_statestream', 'speedtestdotnet', 'fritz', 'fritzbox_callmonitor'];
 const DWD_COLOR =['var(--disabled-color, #9e9e9e)', '#ffeb3b', '#ff9800', '#f44336', '#9c27b0'];
 const DWD_TEXT = ['keine Warnung', 'Wetterwarnung', 'Markantes Wetter', 'Unwetterwarnung', 'Extremes Unwetter'];
 
@@ -601,7 +603,7 @@ class HomeDashboardCard extends HTMLElement {
     const o = c && typeof c === 'object' ? c : {};
     return {
       show: c === false ? 'never' : o.show || 'load',
-      min_power: o.min_power ?? 5,
+      min_power: o.min_power ?? 10,
       exclude_integrations: o.exclude_integrations || ACT_EXCL,
       exclude: (o.exclude || []).map((x) => String(x).toLowerCase()),
       power_devices: (o.power_devices || []).map((x) => String(x).toLowerCase()),
@@ -653,7 +655,12 @@ class HomeDashboardCard extends HTMLElement {
       const pwDev = pw.length && (sw.length || /messdose|steckdose|zwischenstecker|plug|socket/.test(low) || cfg.power_devices.some((x) => low.includes(x)));
       if (pwDev && watt >= cfg.min_power) hit(pw.find((s) => num(s) * units[s.attributes.unit_of_measurement] === watt), 'aktiv', 'dev');
       // Schalter ohne Leistungsmessung: eingeschaltet = aktiv
-      if (!pwDev) for (const s of sw) if (s.state === 'on') { hit(s, 'eingeschaltet', 'dev'); tog ||= s; }
+      // Schalter ohne Leistungsmessung: nur Lasten (Steckdose, Relais, Beleuchtung, Pumpe …), keine Einstellungsschalter
+      if (!pwDev) {
+        for (const s of sw) {
+          if (s.state === 'on' && (s.attributes.device_class === 'outlet' || ACT_LOAD.test(`${this._name(s)} ${s.entity_id}`))) { hit(s, 'eingeschaltet', 'dev'); tog ||= s; }
+        }
+      }
       for (const s of of('fan')) if (s.state === 'on') { hit(s, 'läuft', 'dev'); tog ||= s; }
       const lights = of('light').filter((s) => s.state === 'on');
       if (lights.length && !why.length) { hit(lights[0], lights.length > 1 ? `${lights.length} Lichter an` : 'an', 'light'); tog = lights[0]; }

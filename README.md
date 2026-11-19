@@ -130,14 +130,14 @@ Links zu Integrationen tragen am Icon die Anzahl aktiver Geräte (eingeschaltet 
 Beim Öffnen des Dashboards erscheint eine Übersicht aller Geräte, die gerade in Betrieb sind, gruppiert nach
 Heizung, Wasser, Medien, Geräte und Licht (nur wenn etwas aktiv ist). Über die Statuskachel „Aktiv“ lässt es sich jederzeit öffnen.
 
-Als aktiv gilt: Heizkörper/Thermostat heizt, Messdose oder schaltbare Steckdose über `min_power` (Standard 5 W),
-Schalter ohne Leistungsmessung eingeschaltet, Haushaltsgerät läuft, Medienwiedergabe, Saug-/Mähroboter in Betrieb, Licht an.
+Als aktiv gilt: Heizkörper/Thermostat heizt, Messdose oder schaltbare Steckdose über `min_power` (Standard 10 W),
+Schaltdose/Relais/Beleuchtung ohne Leistungsmessung eingeschaltet (Einstellungsschalter zählen nicht), Haushaltsgerät läuft, Medienwiedergabe, Saug-/Mähroboter in Betrieb, Licht an.
 Die Gruppe ergibt sich aus der Art oder dem Gerätenamen (z. B. „Messdose Heisswasserspeicher“ → Wasser).
 
 ```yaml
 active_popup:
   show: load            # load (je Seitenaufruf, Standard) | session | always | never; active_popup: false = nie automatisch
-  min_power: 5
+  min_power: 10
   power_devices: [kühlschrank]   # weitere Geräte mit Leistungsmessung (Namensteil)
   exclude: [netzwerk, router]    # nie anzeigen (Namensteil oder entity_id)
   groups:                        # eigene Gruppen, werden zuerst geprüft
