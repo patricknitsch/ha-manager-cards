@@ -111,6 +111,8 @@ links:
 Gibt es den Helfer `input_text.integrationen_ueberwachung` (Option `monitor_entity`), speichert das Popup die Auswahl dort.
 Dieselbe Auswahl nutzt dann die Überwachung in Home Assistant, die unabhängig vom Dashboard läuft und per Telegram meldet:
 Verbindungsfehler, Geräte offline sowie Fehler, Timeouts und Verbindungsabbrüche aus dem Log.
+Ist Telegram nicht erreichbar oder die Meldung älter als 2 Minuten, erscheint sie stattdessen als Benachrichtigung in Home Assistant,
+die bleibt, bis sie jemand quittiert – so geht keine Meldung verloren.
 Das Paket dazu liegt unter [`examples/integrationen_ueberwachung.yaml`](examples/integrationen_ueberwachung.yaml).
 
 Die Wartung zeigt zusätzlich Integrationen mit Fehler (mit „Neu laden“) und ausstehende Neustarts.

@@ -92,18 +92,44 @@ script:
           number:
             mode: box
     sequence:
-      # veraltete Meldungen (älter als 2 Minuten) verwerfen statt nachzusenden
-      - condition: template
-        value_template: "{{ zeit is not defined or zeit in ['', none] or now().timestamp() - (zeit | float(0)) < 120 }}"
+      - variables:
+          ts: "{{ (zeit | float(0)) if zeit is defined and zeit not in ['', none] else now().timestamp() }}"
+          frisch: "{{ now().timestamp() - (ts | float(0)) < 120 }}"
+          hinweis: >-
+            {{ nachricht }}
+
+
+            _Ereignis: {{ ts | timestamp_custom('%d.%m.%Y %H:%M:%S') }} · nicht über Telegram zugestellt_
       # Versand über die Telegram-Bot-Integration an den Standard-Chat; bei Bedarf nur hier anpassen.
-      # Ohne Internet schlägt der Versand fehl und die Meldung wird verworfen.
-      - action: telegram_bot.send_message
-        continue_on_error: true
-        data:
-          title: "Home Assistant"
-          message: "{{ nachricht }}"
-          # Namen wie grohe_smarthome sonst als Markdown (kursiv) interpretiert
-          parse_mode: plain_text
+      # Meldungen, die älter als 2 Minuten sind (Stau nach einem Ausfall), gehen nicht mehr an Telegram.
+      # Was nicht zugestellt werden kann, landet als Benachrichtigung in Home Assistant, die quittiert werden muss.
+      - if:
+          - condition: template
+            value_template: "{{ frisch }}"
+        then:
+          - action: telegram_bot.send_message
+            continue_on_error: true
+            response_variable: telegram
+            data:
+              title: "Home Assistant"
+              message: "{{ nachricht }}"
+              # Namen wie grohe_smarthome sonst als Markdown (kursiv) interpretiert
+              parse_mode: plain_text
+          - if:
+              - condition: template
+                value_template: "{{ telegram is not defined or not (telegram.get('chats') if telegram is mapping else telegram) }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  notification_id: "integrationen_{{ now().timestamp() | int }}_{{ range(1000) | random }}"
+                  title: "Integrationen – Telegram nicht erreichbar"
+                  message: "{{ hinweis }}"
+        else:
+          - action: persistent_notification.create
+            data:
+              notification_id: "integrationen_{{ now().timestamp() | int }}_{{ range(1000) | random }}"
+              title: "Integrationen – verspätete Meldung"
+              message: "{{ hinweis }}"
 
 automation:
   - id: integrationen_stoerung_melden
