@@ -1,4 +1,81 @@
-/*! HA Manager Cards 1.8.5 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.8.6 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+
+/* ===== 00-activity.js ===== */
+{
+/* Gemeinsame Aktivitätserkennung und Farben für alle Karten. Wird im Bundle zuerst geladen,
+ * damit Karten, die ihre Stile beim Laden zusammensetzen (z. B. Pi-hole), die Farbregeln schon vorfinden. */
+/* Aktivität eines Geräts für die Hervorhebung der Gerätekacheln (gemeinsam für alle Karten).
+ * Farbig (Standard): act-pw = verbraucht Strom/heizt/läuft (rot), act-li = Licht an (gelb), act-sw = nur geschaltet (grün),
+ * act-wa = Wassergerät aktiv (blau), act-srv = Server aktiv (lila), act-ph = Pi-hole aktiv und act-xs = X-Sense online (orange).
+ * Farbstärke über die CSS-Variablen --hmc-a (Fläche) und --hmc-b (Rahmen), gesetzt von der Startkarte (color_strength). Mit input_boolean.dashboard_farben = aus: aktive Geräte hell, inaktive gedimmt (act-off). */
+{
+  const PSW = /power.?switch/i; // Ein/Aus eines Thermostats ist eine Einstellung, bei Schaltdosen der Ausgang
+  const SETTING = /lock|sperre|kindersicherung|led|anzeige|display|detect|motion|record|snapshot|modus|mode|sprinkler|zugriff|access|privacy|eco|auto|alarm|notification|benachricht/i;
+  const U = { W: 1, kW: 1000, MW: 1e6 };
+  const SRV = ['proxmoxve', 'pi_hole'];
+  const WATER = /pumpe|pump|bewässer|bewaesser|sprinkler|zisterne|ventil|valve|wasser(?!.*speicher)/i;
+  let idxFor = null; let idx = {}; let resFor = null; let res = {};
+  window.__hmcColorEntity = window.__hmcColorEntity || 'input_boolean.dashboard_farben';
+  /** { a: 'pw'|'li'|'sw'|'srv'|'', cap: Gerät kann aktiv sein, on: eingeschaltet bzw. betriebsbereit } */
+  window.__hmcActRaw = (hass, devId) => {
+    if (!hass || !devId || !hass.entities) return { a: '', cap: false, on: false };
+    if (idxFor !== hass.entities) {
+      idxFor = hass.entities; idx = {};
+      for (const e of Object.values(hass.entities)) if (e.device_id && !e.hidden && !e.disabled_by) (idx[e.device_id] ||= []).push(e);
+    }
+    if (resFor !== hass.states) { resFor = hass.states; res = {}; }
+    if (res[devId]) return res[devId];
+    const dv = hass.devices?.[devId]; const names = `${dv?.name_by_user || ''} ${dv?.name || ''}`;
+    let watt = 0; let run = false; let light = false; let sw = false; let cap = false; let srv = null; let online = false; let on2 = false; let water = false; let clim = false; let psw = false; let xs = false;
+    for (const e of idx[devId] || []) {
+      const st = hass.states[e.entity_id];
+      if (!st) continue;
+      const dom = e.entity_id.split('.')[0]; const a = st.attributes; const on = st.state === 'on';
+      if (st.state !== 'unavailable') online = true;
+      if (e.platform === 'xsense') xs = true;
+      if (SRV.includes(e.platform)) {
+        srv ||= e.platform;
+        if (e.platform === 'pi_hole' && dom === 'switch' && !e.entity_category) srv = on ? 'on' : srv === 'on' ? 'on' : 'pi_hole';
+        if (e.platform === 'proxmoxve' && dom === 'binary_sensor' && ['running', 'connectivity', 'power'].includes(a.device_class)) srv = on ? 'on' : srv === 'on' ? 'on' : 'proxmoxve';
+        continue;
+      }
+      if (dom === 'sensor' && a.device_class === 'power' && U[a.unit_of_measurement]) { cap = true; const v = parseFloat(st.state); if (v > 0) watt = Math.max(watt, v * U[a.unit_of_measurement]); continue; }
+      // Wassergeräte: Ventil offen, Durchfluss, Pumpe/Bewässerung läuft
+      if (dom === 'valve' || (dom === 'sensor' && a.device_class === 'volume_flow_rate')) { cap = true; if (st.state === 'open' || st.state === 'opening' || parseFloat(st.state) > 0) water = true; if (st.state !== 'unavailable') on2 = true; continue; }
+      if (dom === 'binary_sensor' && a.device_class === 'smoke') { cap = true; if (on) run = true; if (st.state !== 'unavailable') on2 = true; continue; }
+      if (e.entity_category) continue;
+      if (dom === 'sensor' && a.device_class === 'enum' && !/^(off|aus|unknown|unavailable|not_connected|disconnected|none|stop|-)$/i.test(st.state)) on2 = true;
+      if (dom === 'climate') { clim = true; cap = true; if (st.state !== 'off' && st.state !== 'unavailable') on2 = true; if (['heating', 'preheating'].includes(a.hvac_action)) run = true; } else if (dom === 'light') { cap = true; if (on) light = true; } else if (['switch', 'fan'].includes(dom) && !SETTING.test(`${a.friendly_name || ''} ${e.entity_id}`)) { cap = true; if (PSW.test(`${a.friendly_name || ''} ${e.entity_id}`)) { if (on) psw = true; } else if (on) sw = true; } else if (dom === 'binary_sensor' && ['running', 'power', 'plug'].includes(a.device_class)) { cap = true; if (on) run = true; } else if (dom === 'sensor' && a.device_class === 'enum' && /^(running|in_use|programmed|active|main_wash|drying|rinse|spin)$/i.test(st.state)) { cap = true; run = true; }
+    }
+    // Server/Pi-hole: aktiv = läuft (Proxmox) bzw. Blockieren an (Pi-hole); ohne Status-Entität reicht „erreichbar“
+    if (srv) { const up = srv === 'on' || (srv === 'proxmoxve' && online && !(idx[devId] || []).some((e) => e.entity_id.startsWith('binary_sensor.'))); return (res[devId] = { a: up ? (srv === 'proxmoxve' ? 'srv' : 'ph') : '', cap: true, on: up, p: (idx[devId] || []).some((e) => e.platform === 'proxmoxve') ? 'proxmoxve' : 'pi_hole' }); }
+    if (psw && !clim) sw = true; // „Power Switch“ ohne Thermostat = Ausgang einer Schaltdose
+    const act = run || watt >= 10 ? 'pw' : xs && online ? 'xs' : water ? 'wa' : light ? 'li' : sw ? (WATER.test(names) ? 'wa' : 'sw') : '';
+    return (res[devId] = { a: act, cap, on: !!act || on2 || watt >= 1 });
+  };
+  /** Farbe je Aktivität – dieselben Werte für Kacheln und Raumsymbole */
+  window.__hmcColors = { pw: '#f44336', wa: '#2196f3', li: '#ffc107', sw: '#4caf50', srv: '#9c27b0', ph: '#ff9800', xs: '#ff9800' };
+  /** Rangfolge, wenn mehrere Geräte einer Gruppe unterschiedlich aktiv sind */
+  window.__hmcRank = ['pw', 'wa', 'srv', 'ph', 'xs', 'li', 'sw'];
+  /** Klassen je nach Modus: farbig oder hell/dunkel */
+  window.__hmcCls = (hass, a, cap) => {
+    const color = hass?.states?.[window.__hmcColorEntity]?.state !== 'off';
+    if (color) return a ? ` act-${a}` : '';
+    return !a && cap ? ' act-off' : '';
+  };
+  window.__hmcAct = (hass, devId) => { const r = window.__hmcActRaw(hass, devId); return window.__hmcCls(hass, r.a, r.cap); };
+  const T = (c) => `background: color-mix(in srgb, ${c} var(--hmc-a, 24%), var(--ha-card-background, var(--card-background-color))); border-color: color-mix(in srgb, ${c} var(--hmc-b, 70%), transparent);`;
+  window.__hmcActCss = `
+    .dev.act-pw { ${T(window.__hmcColors.pw)} }
+    .dev.act-li { ${T(window.__hmcColors.li)} }
+    .dev.act-sw { ${T(window.__hmcColors.sw)} }
+    .dev.act-wa { ${T(window.__hmcColors.wa)} }
+    .dev.act-srv { ${T(window.__hmcColors.srv)} }
+    .dev.act-ph, .dev.act-xs { ${T(window.__hmcColors.ph)} }
+    .dev.act-off { opacity:.55; filter: saturate(.6); }`;
+}
+
+}
 
 /* ===== esphome-manager-card.js ===== */
 {
@@ -8377,73 +8454,6 @@ function morphChildren(a, b) {
 
 /* Gemeinsamer Speicher für per Label ausgeblendete Geräte und Entitäten (gilt für alle Karten und Browser).
  * Daten bleiben erhalten, die Methoden setzt jede Karte neu – so gilt immer der neueste Stand, egal welche Karte zuerst lädt. */
-/* Aktivität eines Geräts für die Hervorhebung der Gerätekacheln (gemeinsam für alle Karten).
- * Farbig (Standard): act-pw = verbraucht Strom/heizt/läuft (rot), act-li = Licht an (gelb), act-sw = nur geschaltet (grün),
- * act-wa = Wassergerät aktiv (blau), act-srv = Server aktiv (lila), act-ph = Pi-hole aktiv und act-xs = X-Sense online (orange).
- * Farbstärke über die CSS-Variablen --hmc-a (Fläche) und --hmc-b (Rahmen), gesetzt von der Startkarte (color_strength). Mit input_boolean.dashboard_farben = aus: aktive Geräte hell, inaktive gedimmt (act-off). */
-{
-  const PSW = /power.?switch/i; // Ein/Aus eines Thermostats ist eine Einstellung, bei Schaltdosen der Ausgang
-  const SETTING = /lock|sperre|kindersicherung|led|anzeige|display|detect|motion|record|snapshot|modus|mode|sprinkler|zugriff|access|privacy|eco|auto|alarm|notification|benachricht/i;
-  const U = { W: 1, kW: 1000, MW: 1e6 };
-  const SRV = ['proxmoxve', 'pi_hole'];
-  const WATER = /pumpe|pump|bewässer|bewaesser|sprinkler|zisterne|ventil|valve|wasser(?!.*speicher)/i;
-  let idxFor = null; let idx = {}; let resFor = null; let res = {};
-  window.__hmcColorEntity = window.__hmcColorEntity || 'input_boolean.dashboard_farben';
-  /** { a: 'pw'|'li'|'sw'|'srv'|'', cap: Gerät kann aktiv sein, on: eingeschaltet bzw. betriebsbereit } */
-  window.__hmcActRaw = (hass, devId) => {
-    if (!hass || !devId || !hass.entities) return { a: '', cap: false, on: false };
-    if (idxFor !== hass.entities) {
-      idxFor = hass.entities; idx = {};
-      for (const e of Object.values(hass.entities)) if (e.device_id && !e.hidden && !e.disabled_by) (idx[e.device_id] ||= []).push(e);
-    }
-    if (resFor !== hass.states) { resFor = hass.states; res = {}; }
-    if (res[devId]) return res[devId];
-    const dv = hass.devices?.[devId]; const names = `${dv?.name_by_user || ''} ${dv?.name || ''}`;
-    let watt = 0; let run = false; let light = false; let sw = false; let cap = false; let srv = null; let online = false; let on2 = false; let water = false; let clim = false; let psw = false; let xs = false;
-    for (const e of idx[devId] || []) {
-      const st = hass.states[e.entity_id];
-      if (!st) continue;
-      const dom = e.entity_id.split('.')[0]; const a = st.attributes; const on = st.state === 'on';
-      if (st.state !== 'unavailable') online = true;
-      if (e.platform === 'xsense') xs = true;
-      if (SRV.includes(e.platform)) {
-        srv ||= e.platform;
-        if (e.platform === 'pi_hole' && dom === 'switch' && !e.entity_category) srv = on ? 'on' : srv === 'on' ? 'on' : 'pi_hole';
-        if (e.platform === 'proxmoxve' && dom === 'binary_sensor' && ['running', 'connectivity', 'power'].includes(a.device_class)) srv = on ? 'on' : srv === 'on' ? 'on' : 'proxmoxve';
-        continue;
-      }
-      if (dom === 'sensor' && a.device_class === 'power' && U[a.unit_of_measurement]) { cap = true; const v = parseFloat(st.state); if (v > 0) watt = Math.max(watt, v * U[a.unit_of_measurement]); continue; }
-      // Wassergeräte: Ventil offen, Durchfluss, Pumpe/Bewässerung läuft
-      if (dom === 'valve' || (dom === 'sensor' && a.device_class === 'volume_flow_rate')) { cap = true; if (st.state === 'open' || st.state === 'opening' || parseFloat(st.state) > 0) water = true; if (st.state !== 'unavailable') on2 = true; continue; }
-      if (dom === 'binary_sensor' && a.device_class === 'smoke') { cap = true; if (on) run = true; if (st.state !== 'unavailable') on2 = true; continue; }
-      if (e.entity_category) continue;
-      if (dom === 'sensor' && a.device_class === 'enum' && !/^(off|aus|unknown|unavailable|not_connected|disconnected|none|stop|-)$/i.test(st.state)) on2 = true;
-      if (dom === 'climate') { clim = true; cap = true; if (st.state !== 'off' && st.state !== 'unavailable') on2 = true; if (['heating', 'preheating'].includes(a.hvac_action)) run = true; } else if (dom === 'light') { cap = true; if (on) light = true; } else if (['switch', 'fan'].includes(dom) && !SETTING.test(`${a.friendly_name || ''} ${e.entity_id}`)) { cap = true; if (PSW.test(`${a.friendly_name || ''} ${e.entity_id}`)) { if (on) psw = true; } else if (on) sw = true; } else if (dom === 'binary_sensor' && ['running', 'power', 'plug'].includes(a.device_class)) { cap = true; if (on) run = true; } else if (dom === 'sensor' && a.device_class === 'enum' && /^(running|in_use|programmed|active|main_wash|drying|rinse|spin)$/i.test(st.state)) { cap = true; run = true; }
-    }
-    // Server/Pi-hole: aktiv = läuft (Proxmox) bzw. Blockieren an (Pi-hole); ohne Status-Entität reicht „erreichbar“
-    if (srv) { const up = srv === 'on' || (srv === 'proxmoxve' && online && !(idx[devId] || []).some((e) => e.entity_id.startsWith('binary_sensor.'))); return (res[devId] = { a: up ? (srv === 'proxmoxve' ? 'srv' : 'ph') : '', cap: true, on: up }); }
-    if (psw && !clim) sw = true; // „Power Switch“ ohne Thermostat = Ausgang einer Schaltdose
-    const act = run || watt >= 10 ? 'pw' : xs && online ? 'xs' : water ? 'wa' : light ? 'li' : sw ? (WATER.test(names) ? 'wa' : 'sw') : '';
-    return (res[devId] = { a: act, cap, on: !!act || on2 || watt >= 1 });
-  };
-  /** Klassen je nach Modus: farbig oder hell/dunkel */
-  window.__hmcCls = (hass, a, cap) => {
-    const color = hass?.states?.[window.__hmcColorEntity]?.state !== 'off';
-    if (color) return a ? ` act-${a}` : '';
-    return !a && cap ? ' act-off' : '';
-  };
-  window.__hmcAct = (hass, devId) => { const r = window.__hmcActRaw(hass, devId); return window.__hmcCls(hass, r.a, r.cap); };
-  const T = (c) => `background: color-mix(in srgb, ${c} var(--hmc-a, 24%), var(--ha-card-background, var(--card-background-color))); border-color: color-mix(in srgb, ${c} var(--hmc-b, 70%), transparent);`;
-  window.__hmcActCss = `
-    .dev.act-pw { ${T('#f44336')} }
-    .dev.act-li { ${T('#ffc107')} }
-    .dev.act-sw { ${T('#4caf50')} }
-    .dev.act-wa { ${T('#2196f3')} }
-    .dev.act-srv { ${T('#9c27b0')} }
-    .dev.act-ph, .dev.act-xs { ${T('#ff9800')} }
-    .dev.act-off { opacity:.55; filter: saturate(.6); }`;
-}
-
 const HIDE = window.__aocHideStore = Object.assign(window.__aocHideStore || {
   label: 'dashboard_ausgeblendet', ids: new Set(), ents: new Set(), ref: null, eref: null, busy: false, subs: new Set(), ver: 0,
 }, {
@@ -9454,7 +9464,7 @@ if (!customElements.get('home-summary-card')) {
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.7.4';
+const VERSION = '2.7.5';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -9480,7 +9490,8 @@ const APPS = [
   { k: 'oven', re: /backofen|oven/i, icon: 'mdi:toaster-oven', name: 'Backofen', c: '#f44336' },
   { k: 'hob', re: /kochfeld|\bherd\b|cooktop|\bhob\b/i, icon: 'mdi:stove', name: 'Kochfeld', c: '#f44336' },
   { k: 'smoke', re: /rauchmelder|smoke|^rm\b/i, icon: 'mdi:smoke-detector-variant', name: 'Rauchmelder', c: '#f44336' },
-  { k: 'server', re: /server|proxmox|\bnas\b|synology|pi-?hole/i, icon: 'mdi:server', name: 'Server', c: '#9c27b0' },
+  { k: 'pihole', re: /pi-?hole/i, icon: 'mdi:pi-hole', name: 'Pi-hole', c: '#ff9800' },
+  { k: 'server', re: /server|proxmox|\bnas\b|synology/i, icon: 'mdi:server', name: 'Server', c: '#9c27b0' },
 ];
 const PLUG = /messdose|steckdose|zwischenstecker|plug/i;
 const APPS_EXCL = /ha-mcp|mcp server/i;   // Dienste, keine Geräte
@@ -10403,9 +10414,9 @@ class HomeDashboardCard extends HTMLElement {
     if (media.length) ic('mdi:play-circle', '#2196f3', media.length, true, `${media.length} Wiedergabe${media.length > 1 ? 'n' : ''}`);
     const open = sts.filter((s) => s.entity_id.startsWith('binary_sensor.') && OPEN_DC.includes(s.attributes.device_class));
     if (open.some((s) => s.state === 'on')) { const n = open.filter((s) => s.state === 'on').length; ic('mdi:window-open-variant', '#2196f3', n, true, `${n} offen`); }
-    // Geräte: rot = aktiv, grün = eingeschaltet; aus oder deaktiviert = kein Symbol
+    // Geräte in derselben Farbe wie ihre Kachel (rot Verbrauch, blau Wasser, lila Server, orange Pi-hole/X-Sense, grün an); aus = kein Symbol
     for (const g of this._appsOf(a.area_id)) {
-      ic(g.icon, g.act ? '#f44336' : g.k === 'smoke' ? '#ff9800' : '#4caf50', g.n, true, `${g.name}: ${g.n} an${g.act ? `, ${g.act} aktiv` : ''}`);
+      ic(g.icon, g.color, g.n, true, `${g.name}: ${g.n} an${g.act ? `, ${g.act} aktiv` : ''}`);
     }
     const cams = this._areaCams(a.area_id).map((id) => hass.states[id]);
     if (cams.length) {
@@ -10424,16 +10435,22 @@ class HomeDashboardCard extends HTMLElement {
     for (const d of Object.values(hass.devices || {})) {
       if (d.area_id !== areaId || d.disabled_by || d.entry_type === 'service' || HIDE.ids.has(d.id) || HIDE.restrictedDev?.(d.id)) continue;
       const name = `${d.name_by_user || d.name || ''} ${d.model || ''}`;
-      const g = !APPS_EXCL.test(name) && APPS.find((x) => x.re.test(name));
-      if (!g) continue;
       const r = window.__hmcActRaw ? window.__hmcActRaw(hass, d.id) : { a: '', on: false };
+      // Proxmox-Geräte sind immer Server, Pi-hole-Geräte immer Pi-hole – unabhängig vom Namen (z. B. Container „pihole-backup“)
+      const g = APPS_EXCL.test(name) ? null : r.p ? APPS.find((x) => x.k === (r.p === 'proxmoxve' ? 'server' : 'pihole')) : APPS.find((x) => x.re.test(name));
+      if (!g) continue;
       if (!r.on) continue; // ausgeschaltet oder nicht erreichbar: kein Symbol
-      const x = (groups[g.k] ||= { g, plug: 0, dev: 0, act: 0 });
+      const x = (groups[g.k] ||= { g, plug: 0, dev: 0, act: 0, kinds: new Set() });
       if (PLUG.test(name)) x.plug++; else x.dev++;
-      // aktiv = verbraucht Strom, läuft, heizt bzw. Server läuft; sonst nur eingeschaltet
-      if (['pw', 'srv'].includes(r.a)) x.act++;
+      if (r.a) { x.kinds.add(r.a); if (['pw', 'wa', 'srv', 'ph'].includes(r.a)) x.act++; }
     }
-    const out = APPS.filter((g) => groups[g.k]).map((g) => { const x = groups[g.k]; const n = Math.max(x.plug, x.dev); return { ...g, n, act: Math.min(x.act, n) }; });
+    const rank = window.__hmcRank || [];
+    const out = APPS.filter((g) => groups[g.k]).map((g) => {
+      const x = groups[g.k]; const n = Math.max(x.plug, x.dev);
+      // Farbe wie die Gerätekachel: höchste Aktivität der Gruppe, sonst grün (nur eingeschaltet)
+      const kind = rank.find((k) => x.kinds.has(k));
+      return { ...g, n, act: Math.min(x.act, n), color: (kind && window.__hmcColors?.[kind]) || '#4caf50' };
+    });
     return (this._apC[areaId] = out);
   }
 
@@ -10912,4 +10929,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.8.5 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.8.6 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');

@@ -23,7 +23,7 @@
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.7.4';
+const VERSION = '2.7.5';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -49,7 +49,8 @@ const APPS = [
   { k: 'oven', re: /backofen|oven/i, icon: 'mdi:toaster-oven', name: 'Backofen', c: '#f44336' },
   { k: 'hob', re: /kochfeld|\bherd\b|cooktop|\bhob\b/i, icon: 'mdi:stove', name: 'Kochfeld', c: '#f44336' },
   { k: 'smoke', re: /rauchmelder|smoke|^rm\b/i, icon: 'mdi:smoke-detector-variant', name: 'Rauchmelder', c: '#f44336' },
-  { k: 'server', re: /server|proxmox|\bnas\b|synology|pi-?hole/i, icon: 'mdi:server', name: 'Server', c: '#9c27b0' },
+  { k: 'pihole', re: /pi-?hole/i, icon: 'mdi:pi-hole', name: 'Pi-hole', c: '#ff9800' },
+  { k: 'server', re: /server|proxmox|\bnas\b|synology/i, icon: 'mdi:server', name: 'Server', c: '#9c27b0' },
 ];
 const PLUG = /messdose|steckdose|zwischenstecker|plug/i;
 const APPS_EXCL = /ha-mcp|mcp server/i;   // Dienste, keine Geräte
@@ -972,9 +973,9 @@ class HomeDashboardCard extends HTMLElement {
     if (media.length) ic('mdi:play-circle', '#2196f3', media.length, true, `${media.length} Wiedergabe${media.length > 1 ? 'n' : ''}`);
     const open = sts.filter((s) => s.entity_id.startsWith('binary_sensor.') && OPEN_DC.includes(s.attributes.device_class));
     if (open.some((s) => s.state === 'on')) { const n = open.filter((s) => s.state === 'on').length; ic('mdi:window-open-variant', '#2196f3', n, true, `${n} offen`); }
-    // Geräte: rot = aktiv, grün = eingeschaltet; aus oder deaktiviert = kein Symbol
+    // Geräte in derselben Farbe wie ihre Kachel (rot Verbrauch, blau Wasser, lila Server, orange Pi-hole/X-Sense, grün an); aus = kein Symbol
     for (const g of this._appsOf(a.area_id)) {
-      ic(g.icon, g.act ? '#f44336' : g.k === 'smoke' ? '#ff9800' : '#4caf50', g.n, true, `${g.name}: ${g.n} an${g.act ? `, ${g.act} aktiv` : ''}`);
+      ic(g.icon, g.color, g.n, true, `${g.name}: ${g.n} an${g.act ? `, ${g.act} aktiv` : ''}`);
     }
     const cams = this._areaCams(a.area_id).map((id) => hass.states[id]);
     if (cams.length) {
@@ -993,16 +994,22 @@ class HomeDashboardCard extends HTMLElement {
     for (const d of Object.values(hass.devices || {})) {
       if (d.area_id !== areaId || d.disabled_by || d.entry_type === 'service' || HIDE.ids.has(d.id) || HIDE.restrictedDev?.(d.id)) continue;
       const name = `${d.name_by_user || d.name || ''} ${d.model || ''}`;
-      const g = !APPS_EXCL.test(name) && APPS.find((x) => x.re.test(name));
-      if (!g) continue;
       const r = window.__hmcActRaw ? window.__hmcActRaw(hass, d.id) : { a: '', on: false };
+      // Proxmox-Geräte sind immer Server, Pi-hole-Geräte immer Pi-hole – unabhängig vom Namen (z. B. Container „pihole-backup“)
+      const g = APPS_EXCL.test(name) ? null : r.p ? APPS.find((x) => x.k === (r.p === 'proxmoxve' ? 'server' : 'pihole')) : APPS.find((x) => x.re.test(name));
+      if (!g) continue;
       if (!r.on) continue; // ausgeschaltet oder nicht erreichbar: kein Symbol
-      const x = (groups[g.k] ||= { g, plug: 0, dev: 0, act: 0 });
+      const x = (groups[g.k] ||= { g, plug: 0, dev: 0, act: 0, kinds: new Set() });
       if (PLUG.test(name)) x.plug++; else x.dev++;
-      // aktiv = verbraucht Strom, läuft, heizt bzw. Server läuft; sonst nur eingeschaltet
-      if (['pw', 'srv'].includes(r.a)) x.act++;
+      if (r.a) { x.kinds.add(r.a); if (['pw', 'wa', 'srv', 'ph'].includes(r.a)) x.act++; }
     }
-    const out = APPS.filter((g) => groups[g.k]).map((g) => { const x = groups[g.k]; const n = Math.max(x.plug, x.dev); return { ...g, n, act: Math.min(x.act, n) }; });
+    const rank = window.__hmcRank || [];
+    const out = APPS.filter((g) => groups[g.k]).map((g) => {
+      const x = groups[g.k]; const n = Math.max(x.plug, x.dev);
+      // Farbe wie die Gerätekachel: höchste Aktivität der Gruppe, sonst grün (nur eingeschaltet)
+      const kind = rank.find((k) => x.kinds.has(k));
+      return { ...g, n, act: Math.min(x.act, n), color: (kind && window.__hmcColors?.[kind]) || '#4caf50' };
+    });
     return (this._apC[areaId] = out);
   }
 

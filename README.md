@@ -153,6 +153,6 @@ dann werden aktive Geräte hell und inaktive gedimmt dargestellt. Ohne Helfer si
 
 In der Statusleiste pulsieren Licht, Heizung, Fenster, Rollos, Schalter und das offene Ventil, sobald etwas aktiv ist.
 Die Raumkacheln zeigen zusätzlich Boiler, Waschmaschine, Trockner, Backofen, Kochfeld, Dampfgarer, Geschirrspüler, Rauchmelder
-und Server mit der Anzahl eingeschalteter Geräte (erkannt am Gerätenamen; Messdose und Gerät zählen zusammen als eines):
-rot, wenn aktiv (Verbrauch, läuft, Server an), sonst grün; ausgeschaltete oder deaktivierte Geräte erscheinen nicht.
+Server und Pi-hole mit der Anzahl eingeschalteter Geräte (erkannt am Gerätenamen bzw. an der Integration; Messdose und Gerät zählen zusammen als eines),
+in derselben Farbe wie die Gerätekachel; ausgeschaltete oder deaktivierte Geräte erscheinen nicht.
 Mediengeräte erscheinen dort nur während einer Wiedergabe.
