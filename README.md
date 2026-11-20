@@ -158,4 +158,4 @@ in derselben Farbe wie die Gerätekachel; ausgeschaltete oder deaktivierte Gerä
 Mediengeräte erscheinen dort nur während einer Wiedergabe.
 
 Links zu ESPHome, Grohe, LocalThings, Miele, Schlüter, Shelly, Tasmota, X-Sense, Pi-hole und Proxmox übernehmen die Farbe ihrer aktiven Geräte: die häufigste Farbe gewinnt, bei Gleichstand die stärkere
-(rot vor blau, lila, orange, gelb, grün). Ist kein Gerät aktiv, gilt die eingestellte `color`; `auto_color: false` am Link schaltet das ab, `auto_color: true` schaltet es für andere Integrationen ein.
+(rot vor blau, lila, orange, gelb, grün). Ist kein Gerät aktiv (alles aus oder deaktiviert), wird der Link grau; `auto_color: false` am Link schaltet das ab, `auto_color: true` schaltet es für andere Integrationen ein.

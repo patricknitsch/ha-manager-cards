@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.8.8 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.8.9 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== 00-activity.js ===== */
 {
@@ -9469,7 +9469,7 @@ if (!customElements.get('home-summary-card')) {
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.7.7';
+const VERSION = '2.7.8';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -10394,7 +10394,9 @@ class HomeDashboardCard extends HTMLElement {
       } else if (l.popup === 'integrations') info.push('Überwachung');
       if (l.text) info.push(esc(l.text));
       // Integrationslinks: Farbe aus den aktiven Geräten (auto_color: false behält die eingestellte Farbe); sonst eingestellte Farbe
-      const auto = l.integration && (l.auto_color ?? AUTO_LINKS.includes(l.integration)) ? this._linkStats(l.integration).color : null;
+      // ohne aktives Gerät grau (alles aus bzw. deaktiviert)
+      const isAuto = l.integration && (l.auto_color ?? AUTO_LINKS.includes(l.integration));
+      const auto = isAuto ? this._linkStats(l.integration).color || 'var(--disabled-color, #9e9e9e)' : null;
       return `<div class="card lk click" data-k="l${i}" data-link="${i}" style="--c:${esc(auto || l.color || 'var(--primary-color)')}">
         <div class="bub">${badge}<ha-icon icon="${esc(l.icon || 'mdi:open-in-app')}"></ha-icon></div>
         <div class="n"><b>${esc(l.name || l.path)}</b><span>${info.join(' · ')}</span></div><ha-icon icon="mdi:chevron-right"></ha-icon></div>`;
@@ -10948,4 +10950,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.8.8 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.8.9 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
