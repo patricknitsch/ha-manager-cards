@@ -156,3 +156,6 @@ Die Raumkacheln zeigen zusätzlich Boiler, Waschmaschine, Trockner, Backofen, Ko
 Server und Pi-hole mit der Anzahl eingeschalteter Geräte (erkannt am Gerätenamen bzw. an der Integration; Messdose und Gerät zählen zusammen als eines),
 in derselben Farbe wie die Gerätekachel; ausgeschaltete oder deaktivierte Geräte erscheinen nicht.
 Mediengeräte erscheinen dort nur während einer Wiedergabe.
+
+Links zu ESPHome, Grohe, LocalThings, Miele, Schlüter, Shelly, Tasmota, X-Sense, Pi-hole und Proxmox übernehmen die Farbe ihrer aktiven Geräte: die häufigste Farbe gewinnt, bei Gleichstand die stärkere
+(rot vor blau, lila, orange, gelb, grün). Ist kein Gerät aktiv, gilt die eingestellte `color`; `auto_color: false` am Link schaltet das ab, `auto_color: true` schaltet es für andere Integrationen ein.

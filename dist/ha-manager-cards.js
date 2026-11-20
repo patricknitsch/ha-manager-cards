@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.8.7 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.8.8 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== 00-activity.js ===== */
 {
@@ -9462,13 +9462,14 @@ if (!customElements.get('home-summary-card')) {
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  *   admin_only: [pi_hole, proxmoxve, xsense]   # Integrationen nur für Administratoren (Links, Räume, Zähler)
  *   links: [{ …, admin: true }]                # einzelnen Link nur Administratoren zeigen
+ *   links: [{ …, auto_color: false }]          # Geräte-Integrationen färben sich nach ihren aktiven Geräten (häufigste Farbe); true schaltet es für weitere ein
  *   popup_opacity: 50                         # Deckkraft der Popups in % (100 = deckend), popup_blur: 10 (px), popup_dim: 20 (% Abdunklung)
  *   color_strength: 24                         # Farbstärke der Gerätehervorhebung in % (Rahmen = doppelt + 20)
  *   color_entity: input_boolean.dashboard_farben   # farbige Hervorhebung an/aus (aus = aktiv hell, inaktiv gedimmt)
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.7.6';
+const VERSION = '2.7.7';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -9498,6 +9499,8 @@ const APPS = [
   { k: 'server', re: /server|proxmox|\bnas\b|synology/i, icon: 'mdi:server', name: 'Server', c: '#9c27b0' },
 ];
 const PLUG = /messdose|steckdose|zwischenstecker|plug/i;
+// Integrationslinks, deren Farbe sich aus den aktiven Geräten ergibt (andere mit auto_color: true)
+const AUTO_LINKS = ['esphome', 'grohe_smarthome', 'localthings', 'miele_lan', 'ojmicroline_thermostat', 'shelly', 'tasmota', 'xsense', 'pi_hole', 'proxmoxve'];
 const APPS_EXCL = /ha-mcp|mcp server/i;   // Dienste, keine Geräte
 const DWD_COLOR = ['var(--disabled-color, #9e9e9e)', '#ffeb3b', '#ff9800', '#f44336', '#9c27b0'];
 const DWD_TEXT = ['keine Warnung', 'Wetterwarnung', 'Markantes Wetter', 'Unwetterwarnung', 'Extremes Unwetter'];
@@ -10344,7 +10347,16 @@ class HomeDashboardCard extends HTMLElement {
     };
     // dieselben Geräte, die auf den Seiten eingefärbt sind (gemeinsame Erkennung); Rückfall auf die eigene Prüfung
     act = window.__hmcActRaw ? ids.filter((id) => window.__hmcActRaw(hass, id).a).length : ids.filter((id) => devs[id].some(isAct)).length;
-    return (this._lsCache[integration] = { n: ids.length, off, upd, act });
+    // Linkfarbe aus den Gerätefarben: häufigste Farbe der aktiven Geräte, bei Gleichstand die stärkere (Rangfolge wie in den Räumen)
+    let color = null;
+    if (window.__hmcActRaw && window.__hmcColors) {
+      const cnt = {};
+      for (const id of ids) { const a = window.__hmcActRaw(hass, id).a; if (a) cnt[a] = (cnt[a] || 0) + 1; }
+      const rank = window.__hmcRank || [];
+      const kind = Object.keys(cnt).sort((x, y) => cnt[y] - cnt[x] || rank.indexOf(x) - rank.indexOf(y))[0];
+      if (kind) color = window.__hmcColors[kind];
+    }
+    return (this._lsCache[integration] = { n: ids.length, off, upd, act, color });
   }
 
   _renderLinks() {
@@ -10381,7 +10393,9 @@ class HomeDashboardCard extends HTMLElement {
         if (e || w) badge = `<span class="bdg ${e ? 'err' : 'warn'}">${e + w}</span>`;
       } else if (l.popup === 'integrations') info.push('Überwachung');
       if (l.text) info.push(esc(l.text));
-      return `<div class="card lk click" data-k="l${i}" data-link="${i}" style="--c:${esc(l.color || 'var(--primary-color)')}">
+      // Integrationslinks: Farbe aus den aktiven Geräten (auto_color: false behält die eingestellte Farbe); sonst eingestellte Farbe
+      const auto = l.integration && (l.auto_color ?? AUTO_LINKS.includes(l.integration)) ? this._linkStats(l.integration).color : null;
+      return `<div class="card lk click" data-k="l${i}" data-link="${i}" style="--c:${esc(auto || l.color || 'var(--primary-color)')}">
         <div class="bub">${badge}<ha-icon icon="${esc(l.icon || 'mdi:open-in-app')}"></ha-icon></div>
         <div class="n"><b>${esc(l.name || l.path)}</b><span>${info.join(' · ')}</span></div><ha-icon icon="mdi:chevron-right"></ha-icon></div>`;
     }).join('');
@@ -10934,4 +10948,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.8.7 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.8.8 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
