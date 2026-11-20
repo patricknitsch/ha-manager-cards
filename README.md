@@ -125,21 +125,11 @@ Links zu Integrationen tragen am Icon die Anzahl aktiver Geräte (eingeschaltet 
   Links, Geräte in den Räumen und Raum-Popups, Kameras sowie die Zähler oben (Wartung, Batterien, offline).
 - `admin: true` an einem Link zeigt ihn nur Administratoren. HA-Log und Integrationen sind immer nur für Administratoren.
 
-## Start-Dashboard: Popup „Gerade aktiv“
+## Start-Dashboard: Schalter
 
-Beim Öffnen des Dashboards erscheint eine Übersicht aller Geräte, die gerade in Betrieb sind, gruppiert nach
-Heizung, Wasser, Medien, Geräte und Licht (nur wenn etwas aktiv ist). Über die Statuskachel „Aktiv“ lässt es sich jederzeit öffnen.
+Die Statuskachel „Schalter an/aus“ zählt eingeschaltete Steckdosen, Messdosen, Relais und Beleuchtungsschalter
+(Gerätklasse `outlet` oder Name mit Schaltdose, Steckdose, Messdose, Relais, Beleuchtung, Pumpe …; Einstellungsschalter zählen nicht).
+Ein Tipp öffnet die Liste nach Räumen, mit aktueller Leistung der Messdose und Schalter zum Ein- und Ausschalten.
+`switches: false` blendet die Kachel aus.
 
-Als aktiv gilt: Heizkörper/Thermostat heizt, Messdose oder schaltbare Steckdose über `min_power` (Standard 10 W),
-Schaltdose/Relais/Beleuchtung ohne Leistungsmessung eingeschaltet (Einstellungsschalter zählen nicht), Haushaltsgerät läuft, Medienwiedergabe, Saug-/Mähroboter in Betrieb, Licht an.
-Die Gruppe ergibt sich aus der Art oder dem Gerätenamen (z. B. „Messdose Heisswasserspeicher“ → Wasser).
-
-```yaml
-active_popup:
-  show: load            # load (je Seitenaufruf, Standard) | session | always | never; active_popup: false = nie automatisch
-  min_power: 10
-  power_devices: [kühlschrank]   # weitere Geräte mit Leistungsmessung (Namensteil)
-  exclude: [netzwerk, router]    # nie anzeigen (Namensteil oder entity_id)
-  groups:                        # eigene Gruppen, werden zuerst geprüft
-    - { name: Küche, icon: mdi:stove, color: '#795548', match: 'herd|backofen|kochfeld' }
-```
+Alle Popups sind halbtransparent (50 %), das Dashboard scheint durch.
