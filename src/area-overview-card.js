@@ -67,16 +67,16 @@ function morphChildren(a, b) {
   const SRV = ['proxmoxve', 'pi_hole'];
   let idxFor = null; let idx = {}; let resFor = null; let res = {};
   window.__hmcColorEntity = window.__hmcColorEntity || 'input_boolean.dashboard_farben';
-  /** { a: 'pw'|'li'|'sw'|'srv'|'', cap: Gerät kann aktiv sein } */
+  /** { a: 'pw'|'li'|'sw'|'srv'|'', cap: Gerät kann aktiv sein, on: eingeschaltet bzw. betriebsbereit } */
   window.__hmcActRaw = (hass, devId) => {
-    if (!hass || !devId || !hass.entities) return { a: '', cap: false };
+    if (!hass || !devId || !hass.entities) return { a: '', cap: false, on: false };
     if (idxFor !== hass.entities) {
       idxFor = hass.entities; idx = {};
       for (const e of Object.values(hass.entities)) if (e.device_id && !e.hidden && !e.disabled_by) (idx[e.device_id] ||= []).push(e);
     }
     if (resFor !== hass.states) { resFor = hass.states; res = {}; }
     if (res[devId]) return res[devId];
-    let watt = 0; let run = false; let light = false; let sw = false; let cap = false; let srv = null; let online = false;
+    let watt = 0; let run = false; let light = false; let sw = false; let cap = false; let srv = null; let online = false; let on2 = false;
     for (const e of idx[devId] || []) {
       const st = hass.states[e.entity_id];
       if (!st) continue;
@@ -89,13 +89,15 @@ function morphChildren(a, b) {
         continue;
       }
       if (dom === 'sensor' && a.device_class === 'power' && U[a.unit_of_measurement]) { cap = true; const v = parseFloat(st.state); if (v > 0) watt = Math.max(watt, v * U[a.unit_of_measurement]); continue; }
-      if (dom === 'binary_sensor' && a.device_class === 'smoke') { cap = true; if (on) run = true; continue; }
+      if (dom === 'binary_sensor' && a.device_class === 'smoke') { cap = true; if (on) run = true; if (st.state !== 'unavailable') on2 = true; continue; }
       if (e.entity_category) continue;
-      if (dom === 'climate') { cap = true; if (['heating', 'preheating'].includes(a.hvac_action)) run = true; } else if (dom === 'light') { cap = true; if (on) light = true; } else if (['switch', 'fan'].includes(dom) && !SETTING.test(`${a.friendly_name || ''} ${e.entity_id}`)) { cap = true; if (on) sw = true; } else if (dom === 'binary_sensor' && ['running', 'power', 'plug'].includes(a.device_class)) { cap = true; if (on) run = true; } else if (dom === 'sensor' && a.device_class === 'enum' && /^(running|in_use|programmed|active|main_wash|drying|rinse|spin)$/i.test(st.state)) { cap = true; run = true; }
+      if (dom === 'sensor' && a.device_class === 'enum' && !/^(off|aus|unknown|unavailable|not_connected|disconnected|none|stop|-)$/i.test(st.state)) on2 = true;
+      if (dom === 'climate') { cap = true; if (st.state !== 'off' && st.state !== 'unavailable') on2 = true; if (['heating', 'preheating'].includes(a.hvac_action)) run = true; } else if (dom === 'light') { cap = true; if (on) light = true; } else if (['switch', 'fan'].includes(dom) && !SETTING.test(`${a.friendly_name || ''} ${e.entity_id}`)) { cap = true; if (on) sw = true; } else if (dom === 'binary_sensor' && ['running', 'power', 'plug'].includes(a.device_class)) { cap = true; if (on) run = true; } else if (dom === 'sensor' && a.device_class === 'enum' && /^(running|in_use|programmed|active|main_wash|drying|rinse|spin)$/i.test(st.state)) { cap = true; run = true; }
     }
     // Server/Pi-hole: aktiv = läuft (Proxmox) bzw. Blockieren an (Pi-hole); ohne Status-Entität reicht „erreichbar“
-    if (srv) return (res[devId] = { a: srv === 'on' || (srv === 'proxmoxve' && online && !(idx[devId] || []).some((e) => e.entity_id.startsWith('binary_sensor.'))) ? 'srv' : '', cap: true });
-    return (res[devId] = { a: run || watt >= 10 ? 'pw' : light ? 'li' : sw ? 'sw' : '', cap });
+    if (srv) { const up = srv === 'on' || (srv === 'proxmoxve' && online && !(idx[devId] || []).some((e) => e.entity_id.startsWith('binary_sensor.'))); return (res[devId] = { a: up ? 'srv' : '', cap: true, on: up }); }
+    const act = run || watt >= 10 ? 'pw' : light ? 'li' : sw ? 'sw' : '';
+    return (res[devId] = { a: act, cap, on: !!act || on2 || watt >= 1 });
   };
   /** Klassen je nach Modus: farbig oder hell/dunkel */
   window.__hmcCls = (hass, a, cap) => {

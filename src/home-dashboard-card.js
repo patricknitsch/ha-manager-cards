@@ -22,7 +22,7 @@
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.7.0';
+const VERSION = '2.7.1';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -967,8 +967,9 @@ class HomeDashboardCard extends HTMLElement {
     if (media.length) ic('mdi:play-circle', '#2196f3', media.length, true, `${media.length} Wiedergabe${media.length > 1 ? 'n' : ''}`);
     const open = sts.filter((s) => s.entity_id.startsWith('binary_sensor.') && OPEN_DC.includes(s.attributes.device_class));
     if (open.some((s) => s.state === 'on')) { const n = open.filter((s) => s.state === 'on').length; ic('mdi:window-open-variant', '#2196f3', n, true, `${n} offen`); }
+    // Geräte: rot = aktiv, blau = eingeschaltet; aus oder deaktiviert = kein Symbol
     for (const g of this._appsOf(a.area_id)) {
-      ic(g.icon, g.c, g.n, g.act > 0, `${g.name}: ${g.n}${g.act ? `, ${g.act} aktiv` : ''}`);
+      ic(g.icon, g.act ? '#f44336' : '#03a9f4', g.n, true, `${g.name}: ${g.n} an${g.act ? `, ${g.act} aktiv` : ''}`);
     }
     const cams = this._areaCams(a.area_id).map((id) => hass.states[id]);
     if (cams.length) {
@@ -989,10 +990,12 @@ class HomeDashboardCard extends HTMLElement {
       const name = `${d.name_by_user || d.name || ''} ${d.model || ''}`;
       const g = !APPS_EXCL.test(name) && APPS.find((x) => x.re.test(name));
       if (!g) continue;
-      const r = window.__hmcActRaw ? window.__hmcActRaw(hass, d.id) : { a: '' };
+      const r = window.__hmcActRaw ? window.__hmcActRaw(hass, d.id) : { a: '', on: false };
+      if (!r.on) continue; // ausgeschaltet oder nicht erreichbar: kein Symbol
       const x = (groups[g.k] ||= { g, plug: 0, dev: 0, act: 0 });
       if (PLUG.test(name)) x.plug++; else x.dev++;
-      if (r.a) x.act++;
+      // aktiv = verbraucht Strom, läuft, heizt bzw. Server läuft; sonst nur eingeschaltet
+      if (['pw', 'srv'].includes(r.a)) x.act++;
     }
     const out = APPS.filter((g) => groups[g.k]).map((g) => { const x = groups[g.k]; const n = Math.max(x.plug, x.dev); return { ...g, n, act: Math.min(x.act, n) }; });
     return (this._apC[areaId] = out);
