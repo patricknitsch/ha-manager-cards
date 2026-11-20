@@ -117,7 +117,7 @@ class TasmotaManagerCard extends HTMLElement {
     this._devices = devices;
     for (const d of devices) this._ensureDeviceSubs(d);
     if (this._infoId) this._renderInfo();
-    const sig = JSON.stringify([this._latest, this._histTs, devices.map((d) => [d.id, d.name, d.area, d.sig])]);
+    const sig = JSON.stringify([this._latest, this._histTs, devices.map((d) => [d.id, d.name, d.area, d.sig, window.__hmcAct ? window.__hmcAct(this._hass, d.id) : ''])]);
     if (!force && sig === this._sig) return;
     this._sig = sig;
     this._renderGrid();

@@ -54,7 +54,7 @@ class ShellyManagerCard extends HTMLElement {
     this._hass = hass;
     const devices = this._collect();
     if (!this._histTs && devices.length) setTimeout(() => this._fetchHistory(), 0);
-    const sig = JSON.stringify(devices.map((d) => [d.id, d.name, d.area, d.sig]));
+    const sig = JSON.stringify(devices.map((d) => [d.id, d.name, d.area, d.sig, window.__hmcAct ? window.__hmcAct(this._hass, d.id) : '']));
     this._devices = devices;
     if (this._infoId) this._renderInfo();
     if (sig === this._sig) return;

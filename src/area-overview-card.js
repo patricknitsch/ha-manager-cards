@@ -60,11 +60,12 @@ function morphChildren(a, b) {
  * Daten bleiben erhalten, die Methoden setzt jede Karte neu – so gilt immer der neueste Stand, egal welche Karte zuerst lädt. */
 /* Aktivität eines Geräts für die Hervorhebung der Gerätekacheln (gemeinsam für alle Karten).
  * Farbig (Standard): act-pw = verbraucht Strom/heizt/läuft (rot), act-li = Licht an (gelb), act-sw = nur geschaltet (blau),
- * act-srv = Server/Pi-hole aktiv (lila). Mit input_boolean.dashboard_farben = aus: aktive Geräte hell, inaktive gedimmt (act-off). */
+ * act-wa = Wassergerät aktiv (blau), act-srv = Server/Pi-hole aktiv (lila); act-sw (geschaltet) ist grün. Mit input_boolean.dashboard_farben = aus: aktive Geräte hell, inaktive gedimmt (act-off). */
 {
   const SETTING = /power.?switch|lock|sperre|kindersicherung|led|anzeige|display|detect|motion|record|snapshot|modus|mode|sprinkler|zugriff|access|privacy|eco|auto|alarm|notification|benachricht/i;
   const U = { W: 1, kW: 1000, MW: 1e6 };
   const SRV = ['proxmoxve', 'pi_hole'];
+  const WATER = /pumpe|pump|bewässer|bewaesser|sprinkler|zisterne|ventil|valve|wasser(?!.*speicher)/i;
   let idxFor = null; let idx = {}; let resFor = null; let res = {};
   window.__hmcColorEntity = window.__hmcColorEntity || 'input_boolean.dashboard_farben';
   /** { a: 'pw'|'li'|'sw'|'srv'|'', cap: Gerät kann aktiv sein, on: eingeschaltet bzw. betriebsbereit } */
@@ -76,7 +77,8 @@ function morphChildren(a, b) {
     }
     if (resFor !== hass.states) { resFor = hass.states; res = {}; }
     if (res[devId]) return res[devId];
-    let watt = 0; let run = false; let light = false; let sw = false; let cap = false; let srv = null; let online = false; let on2 = false;
+    const dv = hass.devices?.[devId]; const names = `${dv?.name_by_user || ''} ${dv?.name || ''}`;
+    let watt = 0; let run = false; let light = false; let sw = false; let cap = false; let srv = null; let online = false; let on2 = false; let water = false;
     for (const e of idx[devId] || []) {
       const st = hass.states[e.entity_id];
       if (!st) continue;
@@ -89,6 +91,8 @@ function morphChildren(a, b) {
         continue;
       }
       if (dom === 'sensor' && a.device_class === 'power' && U[a.unit_of_measurement]) { cap = true; const v = parseFloat(st.state); if (v > 0) watt = Math.max(watt, v * U[a.unit_of_measurement]); continue; }
+      // Wassergeräte: Ventil offen, Durchfluss, Pumpe/Bewässerung läuft
+      if (dom === 'valve' || (dom === 'sensor' && a.device_class === 'volume_flow_rate')) { cap = true; if (st.state === 'open' || st.state === 'opening' || parseFloat(st.state) > 0) water = true; if (st.state !== 'unavailable') on2 = true; continue; }
       if (dom === 'binary_sensor' && a.device_class === 'smoke') { cap = true; if (on) run = true; if (st.state !== 'unavailable') on2 = true; continue; }
       if (e.entity_category) continue;
       if (dom === 'sensor' && a.device_class === 'enum' && !/^(off|aus|unknown|unavailable|not_connected|disconnected|none|stop|-)$/i.test(st.state)) on2 = true;
@@ -96,7 +100,7 @@ function morphChildren(a, b) {
     }
     // Server/Pi-hole: aktiv = läuft (Proxmox) bzw. Blockieren an (Pi-hole); ohne Status-Entität reicht „erreichbar“
     if (srv) { const up = srv === 'on' || (srv === 'proxmoxve' && online && !(idx[devId] || []).some((e) => e.entity_id.startsWith('binary_sensor.'))); return (res[devId] = { a: up ? 'srv' : '', cap: true, on: up }); }
-    const act = run || watt >= 10 ? 'pw' : light ? 'li' : sw ? 'sw' : '';
+    const act = run || watt >= 10 ? 'pw' : water ? 'wa' : light ? 'li' : sw ? (WATER.test(names) ? 'wa' : 'sw') : '';
     return (res[devId] = { a: act, cap, on: !!act || on2 || watt >= 1 });
   };
   /** Klassen je nach Modus: farbig oder hell/dunkel */
@@ -110,7 +114,8 @@ function morphChildren(a, b) {
   window.__hmcActCss = `
     .dev.act-pw { ${T('#f44336', 13)} }
     .dev.act-li { ${T('#ffc107', 16)} }
-    .dev.act-sw { ${T('#03a9f4', 13)} }
+    .dev.act-sw { ${T('#4caf50', 13)} }
+    .dev.act-wa { ${T('#2196f3', 14)} }
     .dev.act-srv { ${T('#9c27b0', 13)} }
     .dev.act-off { opacity:.55; filter: saturate(.6); }`;
 }

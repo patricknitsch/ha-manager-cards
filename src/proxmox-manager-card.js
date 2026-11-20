@@ -48,7 +48,7 @@ class ProxmoxManagerCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     const devices = this._collect();
-    const sig = JSON.stringify(devices.map((d) => [d.id, d.name, d.area, d.sig]));
+    const sig = JSON.stringify(devices.map((d) => [d.id, d.name, d.area, d.sig, window.__hmcAct ? window.__hmcAct(this._hass, d.id) : '']));
     this._devices = devices;
     if (this._infoId) this._renderInfo();
     if (sig === this._sig) return;

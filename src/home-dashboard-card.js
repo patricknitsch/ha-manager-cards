@@ -22,7 +22,7 @@
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.7.1';
+const VERSION = '2.7.2';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -38,13 +38,13 @@ const WX = {
 };
 // Schalter, die eine Last schalten: Steckdosen, Messdosen, Relais, Beleuchtung, Pumpen (keine Einstellungsschalter)
 const SW_LOAD = /schaltdose|steckdose|messdose|zwischenstecker|relais|relay|plug|socket|outlet|beleuchtung|lampe|pumpe|lüfter|luefter|ventilator/i;
-// Gerätegruppen in der Raumkachel (Anzahl, aktiv hervorgehoben); Reihenfolge zählt (Dampfgarer vor Backofen)
+// Gerätegruppen in der Raumkachel (Anzahl, aktiv hervorgehoben); Reihenfolge zählt (Geschirrspüler/Dishwasher vor Waschmaschine, Dampfgarer vor Backofen)
 const APPS = [
   { k: 'boiler', re: /boiler|hei(ß|ss)wasser|warmwasser/i, icon: 'mdi:water-boiler', name: 'Boiler', c: '#f44336' },
-  { k: 'washer', re: /waschmaschine|washing.?machine|washer/i, icon: 'mdi:washing-machine', name: 'Waschmaschine', c: '#f44336' },
+  { k: 'dish', re: /geschirrsp(ü|u|ue)ler|dishwasher/i, icon: 'mdi:dishwasher', name: 'Geschirrspüler', c: '#f44336' },
+  { k: 'washer', re: /waschmaschine|washing.?machine|\bwasher\b/i, icon: 'mdi:washing-machine', name: 'Waschmaschine', c: '#f44336' },
   { k: 'dryer', re: /trockner|dryer/i, icon: 'mdi:tumble-dryer', name: 'Trockner', c: '#f44336' },
   { k: 'steam', re: /dampfgarer|steam/i, icon: 'mdi:pot-steam', name: 'Dampfgarer', c: '#f44336' },
-  { k: 'dish', re: /geschirrsp(ü|u|ue)ler|dishwasher/i, icon: 'mdi:dishwasher', name: 'Geschirrspüler', c: '#f44336' },
   { k: 'oven', re: /backofen|oven/i, icon: 'mdi:toaster-oven', name: 'Backofen', c: '#f44336' },
   { k: 'hob', re: /kochfeld|\bherd\b|cooktop|\bhob\b/i, icon: 'mdi:stove', name: 'Kochfeld', c: '#f44336' },
   { k: 'smoke', re: /rauchmelder|smoke|^rm\b/i, icon: 'mdi:smoke-detector-variant', name: 'Rauchmelder', c: '#f44336' },
@@ -685,7 +685,7 @@ class HomeDashboardCard extends HTMLElement {
     si('covers', d.covers.length ? 'mdi:window-shutter-open' : 'mdi:window-shutter', '#9c27b0', d.covers.length ? 'Rollos offen' : 'Rollos zu', d.covers.length, d.covers.length > 0);
     if (this._config.switches !== false && d.switches.length) {
       const n = d.switches.filter((x) => x.state === 'on').length;
-      si('switches', n ? 'mdi:toggle-switch' : 'mdi:toggle-switch-off-outline', '#03a9f4', n ? 'Schalter an' : 'Schalter aus', n, n > 0);
+      si('switches', n ? 'mdi:toggle-switch' : 'mdi:toggle-switch-off-outline', '#4caf50', n ? 'Schalter an' : 'Schalter aus', n, n > 0);
     }
     const maint = d.updates.length + d.battery.length + d.offline.length + this._entryErrors().length + this._restarts().length;
     si('maint', 'mdi:wrench', '#ffa600', maint ? 'Wartung' : 'Alles ok', maint, maint > 0);
@@ -959,7 +959,7 @@ class HomeDashboardCard extends HTMLElement {
     const lights = of('light');
     if (lights.length) { const n = lights.filter((s) => s.state === 'on').length; ic(n ? 'mdi:lightbulb-on' : 'mdi:lightbulb-outline', '#ffc107', n, n > 0, `${n} von ${lights.length} Lichtern an`); }
     const sw = of('switch');
-    if (sw.length) { const n = sw.filter((s) => s.state === 'on').length; ic(n ? 'mdi:toggle-switch' : 'mdi:toggle-switch-off-outline', '#03a9f4', n, n > 0, `${n} von ${sw.length} Schaltern an`); }
+    if (sw.length) { const n = sw.filter((s) => s.state === 'on').length; ic(n ? 'mdi:toggle-switch' : 'mdi:toggle-switch-off-outline', '#4caf50', n, n > 0, `${n} von ${sw.length} Schaltern an`); }
     const cov = of('cover');
     if (cov.length) { const n = cov.filter((s) => s.state !== 'closed').length; ic(n ? 'mdi:window-shutter-open' : 'mdi:window-shutter', '#9c27b0', n, n > 0, `${n} von ${cov.length} Rollos offen`); }
     // Mediengeräte nur bei laufender Wiedergabe
@@ -967,9 +967,9 @@ class HomeDashboardCard extends HTMLElement {
     if (media.length) ic('mdi:play-circle', '#2196f3', media.length, true, `${media.length} Wiedergabe${media.length > 1 ? 'n' : ''}`);
     const open = sts.filter((s) => s.entity_id.startsWith('binary_sensor.') && OPEN_DC.includes(s.attributes.device_class));
     if (open.some((s) => s.state === 'on')) { const n = open.filter((s) => s.state === 'on').length; ic('mdi:window-open-variant', '#2196f3', n, true, `${n} offen`); }
-    // Geräte: rot = aktiv, blau = eingeschaltet; aus oder deaktiviert = kein Symbol
+    // Geräte: rot = aktiv, grün = eingeschaltet; aus oder deaktiviert = kein Symbol
     for (const g of this._appsOf(a.area_id)) {
-      ic(g.icon, g.act ? '#f44336' : '#03a9f4', g.n, true, `${g.name}: ${g.n} an${g.act ? `, ${g.act} aktiv` : ''}`);
+      ic(g.icon, g.act ? '#f44336' : '#4caf50', g.n, true, `${g.name}: ${g.n} an${g.act ? `, ${g.act} aktiv` : ''}`);
     }
     const cams = this._areaCams(a.area_id).map((id) => hass.states[id]);
     if (cams.length) {
@@ -1328,7 +1328,7 @@ class HomeDashboardCard extends HTMLElement {
         }));
       case 'switches': {
         const on = d.switches.filter((x) => x.state === 'on').length;
-        this._popHead('mdi:toggle-switch', '#03a9f4', 'Schalter', `${on} von ${d.switches.length} an`, 560);
+        this._popHead('mdi:toggle-switch', '#4caf50', 'Schalter', `${on} von ${d.switches.length} an`, 560);
         const pw = (st) => {
           // Leistung der Messdose am selben Gerät, falls vorhanden
           const dev = hass.entities[st.entity_id]?.device_id;
@@ -1337,7 +1337,7 @@ class HomeDashboardCard extends HTMLElement {
           return v != null && v >= 1 ? `<span style="margin-right:12px">${fW(v * (hass.states[p.entity_id].attributes.unit_of_measurement === 'kW' ? 1000 : 1))}</span>` : '';
         };
         return list(byArea(d.switches).map((s) => this._row(s, `<span style="display:inline-flex;align-items:center">${s.state === 'on' ? pw(s) : ''}${tog(s)}</span>`,
-          s.state === 'on' ? 'mdi:power-socket-de' : 'mdi:power-plug-off-outline', s.state === 'on' ? '#03a9f4' : '')));
+          s.state === 'on' ? 'mdi:power-socket-de' : 'mdi:power-plug-off-outline', s.state === 'on' ? '#4caf50' : '')));
       }
       case 'open':
         this._popHead('mdi:window-open-variant', '#2196f3', 'Fenster & Türen', `${d.open.length} offen`, 520);

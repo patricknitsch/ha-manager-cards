@@ -124,7 +124,7 @@ class EsphomeManagerCard extends HTMLElement {
     const devices = this._collect();
     this._devices = devices;
     if (this._infoId) this._renderInfo();
-    const sig = JSON.stringify([this._histTs, this._latest, devices.map((d) => [d.id, d.name, d.area, d.sig])]);
+    const sig = JSON.stringify([this._histTs, this._latest, devices.map((d) => [d.id, d.name, d.area, d.sig, window.__hmcAct ? window.__hmcAct(this._hass, d.id) : ''])]);
     if (!force && sig === this._sig) return;
     this._sig = sig;
     this._renderGrid();

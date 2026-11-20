@@ -64,7 +64,7 @@ class LocalThingsManagerCard extends HTMLElement {
     this._hass = hass;
     if (!this._entriesReq) this._loadEntries();
     const devices = this._collect();
-    const sig = JSON.stringify(devices.map((d) => [d.id, d.name, d.area, d.sig]));
+    const sig = JSON.stringify(devices.map((d) => [d.id, d.name, d.area, d.sig, window.__hmcAct ? window.__hmcAct(this._hass, d.id) : '']));
     this._devices = devices;
     if (this._infoId) this._renderInfo();
     if (sig === this._sig) return;
@@ -315,7 +315,7 @@ class LocalThingsManagerCard extends HTMLElement {
         .grid { display:grid; gap:8px; grid-template-columns: repeat(auto-fill, minmax(var(--lmc-min, 240px), 1fr)); }
         .dev { background: var(--ha-card-background, var(--card-background-color)); border-radius: var(--ha-card-border-radius, 12px);
           box-shadow: var(--ha-card-box-shadow, none); border: 1px solid var(--divider-color); display:flex; flex-direction:column; overflow:hidden; }
-        .dev.offline { opacity:.55; }
+        .dev.offline { opacity:.55; }${window.__hmcActCss || ''}
         .dev.active { border-color: var(--primary-color); }
         .dev.fault { border-color: var(--error-color, #db4437); box-shadow: 0 0 0 2px var(--error-color, #db4437); }
         .head { display:flex; align-items:center; gap:10px; padding:10px 8px 4px 10px; }
@@ -601,7 +601,7 @@ class LocalThingsManagerCard extends HTMLElement {
     }
     const parts = this._deviceParts(d);
     const faulty = d.warnings.some((w) => w.cls === 'err');
-    const cls = `dev${d.online ? '' : ' offline'}${d.active ? ' active' : ''}${faulty ? ' fault' : ''}`;
+    const cls = `dev${d.online ? '' : ' offline'}${d.active ? ' active' : ''}${faulty ? ' fault' : ''}${window.__hmcCls ? window.__hmcCls(this._hass, d.active ? 'pw' : window.__hmcActRaw(this._hass, d.id).a, true) : ''}`;
     if (c.el.className !== cls) c.el.className = cls;
     const src = this._iconSrc(d);
     if (c.last.src !== src) {
