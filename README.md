@@ -144,7 +144,8 @@ popup_dim: 20       # Abdunklung des Dashboards hinter dem Popup in %
 
 Gerätekacheln (Shelly, Tasmota, ESPHome, Schlüter, Proxmox, Pi-hole und Raum-Popups) werden hinterlegt, solange das Gerät aktiv ist:
 rot bei Verbrauch ab 10 W, Heizen, laufendem Haushaltsgerät oder Rauchalarm; blau bei Wassergeräten in Betrieb (Ventil offen, Durchfluss, Pumpe);
-gelb bei Licht an; grün, wenn es nur eingeschaltet ist; lila für laufende Server (Proxmox) und Pi-hole mit aktivem Blockieren.
+gelb bei Licht an; grün, wenn es nur eingeschaltet ist; lila für laufende Server (Proxmox); orange für Pi-hole mit aktivem Blockieren
+und erreichbare X-Sense-Geräte (Rauchalarm rot). Die Farbstärke stellt `color_strength` in der Startkarte ein (Standard 24 %).
 Gilt für Shelly, Tasmota, ESPHome, Schlüter, Grohe, Miele, LocalThings, X-Sense, Proxmox, Pi-hole und die Raum-Popups.
 
 Der Helfer `input_boolean.dashboard_farben` ([`examples/dashboard_farben.yaml`](examples/dashboard_farben.yaml)) schaltet die Farben ab:

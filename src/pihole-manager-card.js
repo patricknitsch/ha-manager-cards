@@ -281,7 +281,7 @@ class PiholeManagerCard extends HTMLElement {
     if (!d.online) chips.push('<span class="chip err"><ha-icon icon="mdi:lan-disconnect"></ha-icon>nicht erreichbar</span>');
     const can = d.sw_ && !BAD.includes(d.sw_.st.state);
     const pauses = (this._config.pause || []).map((m) => `<button class="pbtn" data-act="pause" data-e="${d.sw_?.id || ''}" data-m="${m}" data-n="${esc(d.name)}" ${can && d.enabled ? '' : 'disabled'} title="Blockieren ${m} min pausieren"><ha-icon icon="mdi:timer-pause-outline"></ha-icon>${m}′</button>`).join('');
-    const cls = `dev${d.online ? '' : ' offline'}${d.enabled === false ? ' paused' : ''}${window.__hmcCls ? window.__hmcCls(this._hass, d.online && d.enabled !== false ? 'srv' : '', true) : ''}`;
+    const cls = `dev${d.online ? '' : ' offline'}${d.enabled === false ? ' paused' : ''}${window.__hmcCls ? window.__hmcCls(this._hass, d.online && d.enabled !== false ? 'ph' : '', true) : ''}`;
     return `<div class="${cls}" data-k="${d.id}">
       <div class="head"><div class="ico"><ha-icon icon="mdi:pi-hole"></ha-icon><span class="dot"></span></div>
         <div class="name">${esc(d.name)}<small>${esc([d.host, d.area].filter(Boolean).join(' · ') || 'Pi-hole')}</small></div>

@@ -18,11 +18,12 @@
  *   admin_only: [pi_hole, proxmoxve, xsense]   # Integrationen nur für Administratoren (Links, Räume, Zähler)
  *   links: [{ …, admin: true }]                # einzelnen Link nur Administratoren zeigen
  *   popup_opacity: 50                         # Deckkraft der Popups in % (100 = deckend), popup_blur: 10 (px), popup_dim: 20 (% Abdunklung)
+ *   color_strength: 24                         # Farbstärke der Gerätehervorhebung in % (Rahmen = doppelt + 20)
  *   color_entity: input_boolean.dashboard_farben   # farbige Hervorhebung an/aus (aus = aktiv hell, inaktiv gedimmt)
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.7.2';
+const VERSION = '2.7.3';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -359,6 +360,9 @@ class HomeDashboardCard extends HTMLElement {
       solar_forecast: true, battery_low: 20, hide_label: 'dashboard_ausgeblendet', ...config };
     HIDE.label = this._config.hide_label;
     if (this._config.color_entity) window.__hmcColorEntity = this._config.color_entity;
+    // Farbstärke der Gerätehervorhebung (Fläche in %, Rahmen etwas kräftiger), gilt für alle Karten
+    { const n = Number(this._config.color_strength ?? 24); const v = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 24;
+      document.documentElement.style.setProperty('--hmc-a', `${v}%`); document.documentElement.style.setProperty('--hmc-b', `${Math.min(100, v * 2 + 20)}%`); }
     if (!this.shadowRoot) this._build();
     this._camEls = this._camEls || {};
   }
@@ -969,7 +973,7 @@ class HomeDashboardCard extends HTMLElement {
     if (open.some((s) => s.state === 'on')) { const n = open.filter((s) => s.state === 'on').length; ic('mdi:window-open-variant', '#2196f3', n, true, `${n} offen`); }
     // Geräte: rot = aktiv, grün = eingeschaltet; aus oder deaktiviert = kein Symbol
     for (const g of this._appsOf(a.area_id)) {
-      ic(g.icon, g.act ? '#f44336' : '#4caf50', g.n, true, `${g.name}: ${g.n} an${g.act ? `, ${g.act} aktiv` : ''}`);
+      ic(g.icon, g.act ? '#f44336' : g.k === 'smoke' ? '#ff9800' : '#4caf50', g.n, true, `${g.name}: ${g.n} an${g.act ? `, ${g.act} aktiv` : ''}`);
     }
     const cams = this._areaCams(a.area_id).map((id) => hass.states[id]);
     if (cams.length) {
