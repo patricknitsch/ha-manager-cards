@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.8.0 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.8.1 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== esphome-manager-card.js ===== */
 {
@@ -9468,6 +9468,7 @@ const APPS = [
   { k: 'server', re: /server|proxmox|\bnas\b|synology|pi-?hole/i, icon: 'mdi:server', name: 'Server', c: '#9c27b0' },
 ];
 const PLUG = /messdose|steckdose|zwischenstecker|plug/i;
+const APPS_EXCL = /ha-mcp|mcp server/i;   // Dienste, keine Geräte
 const DWD_COLOR = ['var(--disabled-color, #9e9e9e)', '#ffeb3b', '#ff9800', '#f44336', '#9c27b0'];
 const DWD_TEXT = ['keine Warnung', 'Wetterwarnung', 'Markantes Wetter', 'Unwetterwarnung', 'Extremes Unwetter'];
 
@@ -10403,7 +10404,7 @@ class HomeDashboardCard extends HTMLElement {
     for (const d of Object.values(hass.devices || {})) {
       if (d.area_id !== areaId || d.disabled_by || d.entry_type === 'service' || HIDE.ids.has(d.id) || HIDE.restrictedDev?.(d.id)) continue;
       const name = `${d.name_by_user || d.name || ''} ${d.model || ''}`;
-      const g = APPS.find((x) => x.re.test(name));
+      const g = !APPS_EXCL.test(name) && APPS.find((x) => x.re.test(name));
       if (!g) continue;
       const r = window.__hmcActRaw ? window.__hmcActRaw(hass, d.id) : { a: '' };
       const x = (groups[g.k] ||= { g, plug: 0, dev: 0, act: 0 });
@@ -10889,4 +10890,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.8.0 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.8.1 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
