@@ -132,4 +132,10 @@ Die Statuskachel „Schalter an/aus“ zählt eingeschaltete Steckdosen, Messdos
 Ein Tipp öffnet die Liste nach Räumen, mit aktueller Leistung der Messdose und Schalter zum Ein- und Ausschalten.
 `switches: false` blendet die Kachel aus.
 
-Alle Popups sind halbtransparent (50 %), das Dashboard scheint durch.
+Die Popups sind halbtransparent, das Dashboard scheint durch. Einstellbar über:
+
+```yaml
+popup_opacity: 50   # Deckkraft in % (100 = deckend, 0 = nur Unschärfe)
+popup_blur: 10      # Unschärfe des Hintergrunds in px (0 = scharf)
+popup_dim: 20       # Abdunklung des Dashboards hinter dem Popup in %
+```

@@ -17,10 +17,11 @@
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  *   admin_only: [pi_hole, proxmoxve, xsense]   # Integrationen nur für Administratoren (Links, Räume, Zähler)
  *   links: [{ …, admin: true }]                # einzelnen Link nur Administratoren zeigen
+ *   popup_opacity: 50                         # Deckkraft der Popups in % (100 = deckend), popup_blur: 10 (px), popup_dim: 20 (% Abdunklung)
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.6.1';
+const VERSION = '2.6.2';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -260,12 +261,12 @@ const STYLE = `
 const POP_CSS = `
   :host { all: initial; }
   * { box-sizing: border-box; }
-  .bg { position:fixed; inset:0; z-index:99; background: rgba(0,0,0,.2); display:flex; align-items:center; justify-content:center; padding:24px;
+  .bg { position:fixed; inset:0; z-index:99; background: rgba(0,0,0,var(--pop-dim, .2)); display:flex; align-items:center; justify-content:center; padding:24px;
     font-family: var(--ha-font-family-body, var(--paper-font-body1_-_font-family, Roboto, sans-serif)); color: var(--primary-text-color); animation: fd .15s; }
   @keyframes fd { from { opacity:0; } }
   @keyframes su { from { transform: translateY(24px); opacity:.4; } }
-  .pop { background: color-mix(in srgb, var(--primary-background-color, var(--card-background-color)) 50%, transparent);
-    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-radius:24px; width: min(var(--w, 640px), 100%);
+  .pop { background: color-mix(in srgb, var(--primary-background-color, var(--card-background-color)) var(--pop-op, 50%), transparent);
+    -webkit-backdrop-filter: blur(var(--pop-blur, 10px)); backdrop-filter: blur(var(--pop-blur, 10px)); border-radius:24px; width: min(var(--w, 640px), 100%);
     max-height: calc(100vh - 48px); display:flex; flex-direction:column; box-shadow: 0 12px 48px rgba(0,0,0,.45); overflow:hidden; animation: su .18s; }
   .ph { display:flex; align-items:center; gap:12px; padding: 16px 16px 12px 22px; }
   .ph .bub { width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center;
@@ -275,7 +276,7 @@ const POP_CSS = `
   .x { background: var(--secondary-background-color); border:none; width:38px; height:38px; border-radius:50%; cursor:pointer; color: var(--primary-text-color);
     display:flex; align-items:center; justify-content:center; }
   .pb { overflow:auto; padding: 4px 20px 22px; display:flex; flex-direction:column; gap:12px; }
-  .lst { display:flex; flex-direction:column; background: color-mix(in srgb, var(--ha-card-background, var(--card-background-color)) 50%, transparent); border-radius:16px; border:1px solid var(--divider-color); overflow:hidden; }
+  .lst { display:flex; flex-direction:column; background: color-mix(in srgb, var(--ha-card-background, var(--card-background-color)) var(--pop-op, 50%), transparent); border-radius:16px; border:1px solid var(--divider-color); overflow:hidden; }
   .it { display:flex; align-items:center; gap:12px; padding:10px 14px; border-top:1px solid var(--divider-color); cursor:pointer; font-size:15px; }
   .it:first-child { border-top:none; } .it:hover { background: var(--secondary-background-color); }
   .it ha-icon { --mdc-icon-size:22px; color: var(--c, var(--secondary-text-color)); }
@@ -973,6 +974,7 @@ class HomeDashboardCard extends HTMLElement {
       <div class="bg"><div class="pop" style="--w:${ids.length > 1 ? 1280 : 900}px; --c:#009688">
       <div class="ph"><div class="bub"><ha-icon icon="mdi:cctv"></ha-icon></div><div class="t">${esc(title || 'Kameras')}<small>${ids.length} Kamera${ids.length === 1 ? '' : 's'} · Bild antippen für Livebild</small></div>
       <button class="x" data-x title="Schließen"><ha-icon icon="mdi:close"></ha-icon></button></div><div class="pb"><div class="cg"></div></div></div></div>`;
+    this._popStyle(host);
     const r = host.shadowRoot;
     const cp = this._camPop = { host, els: [] };
     for (const type of ['hass-more-info', 'show-dialog']) {
@@ -996,6 +998,14 @@ class HomeDashboardCard extends HTMLElement {
         .then((c) => { if (this._camPop !== cp) return; c.hass = this._hass; cp.els.push(c); slot.appendChild(c); })
         .catch((err) => console.warn('home-dashboard-card:', err));
     }
+  }
+
+  /** Deckkraft (popup_opacity, %), Unschärfe (popup_blur, px) und Abdunklung (popup_dim, %) der Popups */
+  _popStyle(host) {
+    const c = this._config; const cl = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+    host.style.setProperty('--pop-op', `${cl(c.popup_opacity, 0, 100, 50)}%`);
+    host.style.setProperty('--pop-blur', `${cl(c.popup_blur, 0, 40, 10)}px`);
+    host.style.setProperty('--pop-dim', `${cl(c.popup_dim, 0, 100, 20) / 100}`);
   }
 
   _closeCams() {
@@ -1139,6 +1149,7 @@ class HomeDashboardCard extends HTMLElement {
     host.attachShadow({ mode: 'open' }).innerHTML = `<style>${POP_CSS}</style><div class="bg"><div class="pop">
       <div class="ph"><div class="bub"><ha-icon></ha-icon></div><div class="t"></div><button class="x" data-act="close" title="Schließen"><ha-icon icon="mdi:close"></ha-icon></button></div>
       <div class="pb"><div class="htm"></div><div class="host"></div></div></div></div>`;
+    this._popStyle(host);
     const r = host.shadowRoot;
     this._pop = { key, host, r, els: [], html: null };
     // Ereignisse aus dem Popup (liegt an <body>) an Home Assistant weiterreichen
