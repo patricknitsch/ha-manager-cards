@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.8.4 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.8.5 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== esphome-manager-card.js ===== */
 {
@@ -1945,6 +1945,8 @@ class LocalThingsManagerCard extends HTMLElement {
   /** IP-Adressen stehen nur im Titel des Konfigurationseintrags ("Samsung Washer (192.168.x.y)") */
   async _loadEntries() {
     this._entriesReq = true;
+    // nur Administratoren dürfen Konfigurationseinträge lesen (sonst „Unauthorized“ im Log)
+    if (!this._hass?.user?.is_admin) { this._entries = {}; return; }
     try {
       const res = await this._hass.callWS({ type: 'config_entries/get', domain: this._config.integration });
       this._entries = Object.fromEntries((res || []).map((e) => [e.entry_id, e]));
@@ -9452,7 +9454,7 @@ if (!customElements.get('home-summary-card')) {
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.7.3';
+const VERSION = '2.7.4';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -9826,7 +9828,8 @@ class HomeDashboardCard extends HTMLElement {
   async _fetchLog(force) {
     const hass = this._hass;
     const wanted = (this._config.links || []).some((l) => ['log', 'integrations'].includes(l.popup));
-    if (!hass || !wanted || this._logBusy) return;
+    // Systemprotokoll ist nur für Administratoren lesbar: sonst „Unauthorized“-Fehler im Log bei jedem Abruf
+    if (!hass || !wanted || this._logBusy || !hass.user?.is_admin) return;
     if (!force && this._logTs && Date.now() - this._logTs < 120000) return;
     this._logBusy = true;
     try {
@@ -10909,4 +10912,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.8.4 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.8.5 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');

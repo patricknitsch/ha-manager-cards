@@ -23,7 +23,7 @@
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.7.3';
+const VERSION = '2.7.4';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -397,7 +397,8 @@ class HomeDashboardCard extends HTMLElement {
   async _fetchLog(force) {
     const hass = this._hass;
     const wanted = (this._config.links || []).some((l) => ['log', 'integrations'].includes(l.popup));
-    if (!hass || !wanted || this._logBusy) return;
+    // Systemprotokoll ist nur für Administratoren lesbar: sonst „Unauthorized“-Fehler im Log bei jedem Abruf
+    if (!hass || !wanted || this._logBusy || !hass.user?.is_admin) return;
     if (!force && this._logTs && Date.now() - this._logTs < 120000) return;
     this._logBusy = true;
     try {

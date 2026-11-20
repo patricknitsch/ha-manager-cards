@@ -83,6 +83,8 @@ class LocalThingsManagerCard extends HTMLElement {
   /** IP-Adressen stehen nur im Titel des Konfigurationseintrags ("Samsung Washer (192.168.x.y)") */
   async _loadEntries() {
     this._entriesReq = true;
+    // nur Administratoren dürfen Konfigurationseinträge lesen (sonst „Unauthorized“ im Log)
+    if (!this._hass?.user?.is_admin) { this._entries = {}; return; }
     try {
       const res = await this._hass.callWS({ type: 'config_entries/get', domain: this._config.integration });
       this._entries = Object.fromEntries((res || []).map((e) => [e.entry_id, e]));
