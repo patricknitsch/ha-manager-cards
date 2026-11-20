@@ -58,6 +58,39 @@ function morphChildren(a, b) {
 
 /* Gemeinsamer Speicher für per Label ausgeblendete Geräte und Entitäten (gilt für alle Karten und Browser).
  * Daten bleiben erhalten, die Methoden setzt jede Karte neu – so gilt immer der neueste Stand, egal welche Karte zuerst lädt. */
+/* Aktivität eines Geräts für die farbliche Hervorhebung der Gerätekacheln (gemeinsam für alle Karten):
+ * act-pw = verbraucht Strom bzw. heizt (rot), act-li = Licht an (gelb), act-sw = nur geschaltet (blau) */
+if (!window.__hmcAct) {
+  const SETTING = /power.?switch|lock|sperre|kindersicherung|led|anzeige|display|detect|motion|record|snapshot|modus|mode|sprinkler|zugriff|access|privacy|eco|auto|alarm|notification|benachricht/i;
+  const U = { W: 1, kW: 1000, MW: 1e6 };
+  let idxFor = null; let idx = {}; let resFor = null; let res = {};
+  window.__hmcAct = (hass, devId) => {
+    if (!hass || !devId || !hass.entities) return '';
+    if (idxFor !== hass.entities) {
+      idxFor = hass.entities; idx = {};
+      for (const e of Object.values(hass.entities)) if (e.device_id && !e.hidden && !e.disabled_by) (idx[e.device_id] ||= []).push(e);
+    }
+    if (resFor !== hass.states) { resFor = hass.states; res = {}; }
+    if (res[devId] !== undefined) return res[devId];
+    let watt = 0; let heat = false; let light = false; let sw = false;
+    for (const e of idx[devId] || []) {
+      const st = hass.states[e.entity_id];
+      if (!st) continue;
+      const dom = e.entity_id.split('.')[0]; const a = st.attributes;
+      if (dom === 'sensor' && a.device_class === 'power' && U[a.unit_of_measurement]) { const v = parseFloat(st.state); if (v > 0) watt = Math.max(watt, v * U[a.unit_of_measurement]); } else if (e.entity_category) continue;
+      else if (dom === 'climate' && ['heating', 'preheating'].includes(a.hvac_action)) heat = true;
+      else if (dom === 'light' && st.state === 'on') light = true;
+      else if (['switch', 'fan'].includes(dom) && st.state === 'on' && !SETTING.test(`${a.friendly_name || ''} ${e.entity_id}`)) sw = true;
+    }
+    res[devId] = heat || watt >= 10 ? ' act-pw' : light ? ' act-li' : sw ? ' act-sw' : '';
+    return res[devId];
+  };
+  window.__hmcActCss = `
+    .dev.act-pw { background: color-mix(in srgb, #f44336 13%, var(--ha-card-background, var(--card-background-color))); border-color: color-mix(in srgb, #f44336 45%, transparent); }
+    .dev.act-li { background: color-mix(in srgb, #ffc107 16%, var(--ha-card-background, var(--card-background-color))); border-color: color-mix(in srgb, #ffc107 50%, transparent); }
+    .dev.act-sw { background: color-mix(in srgb, #03a9f4 13%, var(--ha-card-background, var(--card-background-color))); border-color: color-mix(in srgb, #03a9f4 45%, transparent); }`;
+}
+
 const HIDE = window.__aocHideStore = Object.assign(window.__aocHideStore || {
   label: 'dashboard_ausgeblendet', ids: new Set(), ents: new Set(), ref: null, eref: null, busy: false, subs: new Set(), ver: 0,
 }, {
@@ -334,7 +367,7 @@ class AreaOverviewCard extends HTMLElement {
         .grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fill, minmax(var(--aoc-min, 300px), 1fr)); }
         .dev { background: var(--ha-card-background, var(--card-background-color)); border-radius: var(--ha-card-border-radius, 12px);
           box-shadow: var(--ha-card-box-shadow, none); border: 1px solid var(--divider-color); display:flex; flex-direction:column; overflow:hidden; }
-        .dev.offline { opacity:.55; }
+        .dev.offline { opacity:.55; }${window.__hmcActCss || ''}
         .dev.hidden-dev { opacity:.5; border-style:dashed; }
         .row.hidrow { opacity:.5; }
         .row .rhide { padding:2px; margin-left:4px; flex:none; } .row .rhide ha-icon { --mdc-icon-size:16px; }
@@ -728,7 +761,7 @@ class AreaOverviewCard extends HTMLElement {
         if (c.hb.firstElementChild.getAttribute('icon') !== hi) c.hb.firstElementChild.setAttribute('icon', hi);
         c.hb.title = d.loose ? (hid ? 'Alle wieder einblenden' : 'Alle im Dashboard ausblenden') : (hid ? 'Wieder einblenden' : 'Im Dashboard ausblenden');
       }
-      const cls = `dev${d.online ? '' : ' offline'}${hid ? ' hidden-dev' : ''}`;
+      const cls = `dev${d.online ? '' : ' offline'}${hid ? ' hidden-dev' : ''}${d.loose ? '' : window.__hmcAct(this._hass, d.id)}`;
       if (c.el.className !== cls) c.el.className = cls;
       c.ico.classList.toggle('on', d.on);
       if (c.icon.getAttribute('icon') !== d.icon) c.icon.setAttribute('icon', d.icon);

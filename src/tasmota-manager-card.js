@@ -452,7 +452,7 @@ class TasmotaManagerCard extends HTMLElement {
         .grid { display:grid; gap:8px; grid-template-columns: repeat(auto-fill, minmax(var(--tmc-min, 300px), 1fr)); }
         .dev { background: var(--ha-card-background, var(--card-background-color)); border-radius: var(--ha-card-border-radius, 12px);
           box-shadow: var(--ha-card-box-shadow, none); border: 1px solid var(--divider-color); display:flex; flex-direction:column; overflow:hidden; }
-        .dev.offline { opacity:.55; }
+        .dev.offline { opacity:.55; }${window.__hmcActCss || ''}
         .head { display:flex; align-items:center; gap:10px; padding:10px 8px 4px 10px; }
         .ico { position:relative; width:34px; height:34px; border-radius:8px; background: var(--secondary-background-color);
           display:flex; align-items:center; justify-content:center; flex:none; }
@@ -783,7 +783,7 @@ class TasmotaManagerCard extends HTMLElement {
     const canUpdate = d.update && !d.upd && hasTopic;
     const fwShort = (parseVersion(d.swFull) || []).slice(0, 3).join('.') || d.swFull || '–';
     return `
-      <div class="dev ${d.online ? '' : 'offline'}">
+      <div class="dev ${d.online ? '' : 'offline'}${window.__hmcAct ? window.__hmcAct(this._hass, d.id) : ''}">
         <div class="head">
           <div class="ico"><ha-icon icon="${DEVICE_ICON(d)}"></ha-icon><span class="dot"></span></div>
           <div class="name">${esc(d.name)}<small>${esc(d.area || 'kein Raum')}</small></div>

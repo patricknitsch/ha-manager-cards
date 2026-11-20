@@ -21,7 +21,7 @@
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.6.2';
+const VERSION = '2.6.3';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -165,7 +165,7 @@ const STYLE = `
   .si .bub ha-icon { --mdc-icon-size: 24px; color: var(--secondary-text-color); }
   .si.on .bub { background: color-mix(in srgb, var(--c) 22%, transparent); }
   .si.on .bub ha-icon { color: var(--c); }
-  .si.alert .bub { animation: pulse 1.6s infinite; }
+  .si.alert .bub, .si.blink .bub { animation: pulse 1.6s infinite; }
   @keyframes pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--c) 25%, transparent); } }
   .si .l { font-size: 12px; color: var(--secondary-text-color); line-height:1.2; }
   .si.on .l { color: var(--primary-text-color); font-weight:500; }
@@ -658,7 +658,9 @@ class HomeDashboardCard extends HTMLElement {
     const hass = this._hass;
     const d = this._data;
     const items = [];
-    const si = (k, icon, color, label, n, on, alert = false, act = 'pop') => items.push(`<div class="card si click ${on ? 'on' : ''} ${alert ? 'alert' : ''}" data-k="${k}"
+    // Kacheln mit aktiven Geräten pulsieren wie die DWD-Warnung
+    const BLINK = ['lights', 'heat', 'open', 'covers', 'switches'];
+    const si = (k, icon, color, label, n, on, alert = false, act = 'pop') => items.push(`<div class="card si click ${on ? 'on' : ''} ${alert ? 'alert' : ''} ${on && BLINK.includes(k) ? 'blink' : ''}" data-k="${k}"
       ${act === 'pop' ? `data-pop="${k}"` : `data-more="${esc(act)}"`} style="--c:${color}">
       <div class="bub"><ha-icon icon="${icon}"></ha-icon></div>${n ? `<span class="cnt">${n}</span>` : ''}<div class="l">${esc(label)}</div></div>`);
     si('lights', d.lights.length ? 'mdi:lightbulb-on' : 'mdi:lightbulb-outline', '#ffc107', d.lights.length ? 'Licht an' : 'Licht aus', d.lights.length, d.lights.length > 0);
@@ -944,8 +946,9 @@ class HomeDashboardCard extends HTMLElement {
     if (sw.length) { const n = sw.filter((s) => s.state === 'on').length; ic(n ? 'mdi:toggle-switch' : 'mdi:toggle-switch-off-outline', '#03a9f4', n, n > 0, `${n} von ${sw.length} Schaltern an`); }
     const cov = of('cover');
     if (cov.length) { const n = cov.filter((s) => s.state !== 'closed').length; ic(n ? 'mdi:window-shutter-open' : 'mdi:window-shutter', '#9c27b0', n, n > 0, `${n} von ${cov.length} Rollos offen`); }
-    const media = of('media_player');
-    if (media.length) { const n = media.filter((s) => s.state === 'playing').length; ic(n ? 'mdi:play-circle' : 'mdi:speaker', '#2196f3', n, n > 0, n ? 'Wiedergabe' : 'Medien'); }
+    // Mediengeräte nur bei laufender Wiedergabe
+    const media = of('media_player').filter((s) => s.state === 'playing');
+    if (media.length) ic('mdi:play-circle', '#2196f3', media.length, true, `${media.length} Wiedergabe${media.length > 1 ? 'n' : ''}`);
     const open = sts.filter((s) => s.entity_id.startsWith('binary_sensor.') && OPEN_DC.includes(s.attributes.device_class));
     if (open.some((s) => s.state === 'on')) { const n = open.filter((s) => s.state === 'on').length; ic('mdi:window-open-variant', '#2196f3', n, true, `${n} offen`); }
     const cams = this._areaCams(a.area_id).map((id) => hass.states[id]);

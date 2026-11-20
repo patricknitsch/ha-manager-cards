@@ -139,3 +139,10 @@ popup_opacity: 50   # Deckkraft in % (100 = deckend, 0 = nur Unschärfe)
 popup_blur: 10      # Unschärfe des Hintergrunds in px (0 = scharf)
 popup_dim: 20       # Abdunklung des Dashboards hinter dem Popup in %
 ```
+
+## Hervorhebung aktiver Geräte
+
+Gerätekacheln (Shelly, Tasmota, ESPHome, Schlüter und Raum-Popups) werden farblich hinterlegt, solange das Gerät aktiv ist:
+rot, wenn es Strom verbraucht (ab 10 W) oder heizt; gelb, wenn ein Licht an ist; blau, wenn es nur eingeschaltet ist.
+In der Statusleiste pulsieren Licht, Heizung, Fenster, Rollos und Schalter, sobald mindestens ein Gerät aktiv ist.
+Mediengeräte erscheinen in der Raumkachel nur während einer Wiedergabe.

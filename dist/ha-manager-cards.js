@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.7.2 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.7.3 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== esphome-manager-card.js ===== */
 {
@@ -564,7 +564,7 @@ class EsphomeManagerCard extends HTMLElement {
         .grid { display:grid; gap:8px; align-items:start; grid-template-columns: repeat(auto-fill, minmax(var(--emc-min, 320px), 1fr)); }
         .dev { background: var(--ha-card-background, var(--card-background-color)); border-radius: var(--ha-card-border-radius, 12px);
           box-shadow: var(--ha-card-box-shadow, none); border: 1px solid var(--divider-color); display:flex; flex-direction:column; overflow:hidden; }
-        .dev.offline { opacity:.55; }
+        .dev.offline { opacity:.55; }${window.__hmcActCss || ''}
         .head { display:flex; align-items:center; gap:10px; padding:10px 8px 4px 10px; }
         .ico { position:relative; width:34px; height:34px; border-radius:8px; background: var(--secondary-background-color);
           display:flex; align-items:center; justify-content:center; flex:none; }
@@ -807,7 +807,7 @@ class EsphomeManagerCard extends HTMLElement {
       c.vals.style.display = 'contents';
     }
     const parts = this._deviceParts(d);
-    const cls = `dev${d.online ? '' : ' offline'}`;
+    const cls = `dev${d.online ? '' : ' offline'}${window.__hmcAct ? window.__hmcAct(this._hass, d.id) : ''}`;
     if (c.el.className !== cls) c.el.className = cls;
     const heat = d.climates.some((x) => x.st.attributes.hvac_action === 'heating');
     c.ico.className = `ico${heat ? ' heat' : ''}`;
@@ -4894,7 +4894,7 @@ class SchlueterManagerCard extends HTMLElement {
         .grid { display:grid; gap:8px; grid-template-columns: repeat(auto-fill, minmax(var(--smc-min, 280px), 1fr)); }
         .dev { background: var(--ha-card-background, var(--card-background-color)); border-radius: var(--ha-card-border-radius, 12px);
           box-shadow: var(--ha-card-box-shadow, none); border: 1px solid var(--divider-color); display:flex; flex-direction:column; overflow:hidden; }
-        .dev.offline { opacity:.55; }
+        .dev.offline { opacity:.55; }${window.__hmcActCss || ''}
         .dev.heat .ico ha-icon { color: var(--state-climate-heat-color, #ff8100); }
         .head { display:flex; align-items:center; gap:10px; padding:10px 8px 4px 10px; }
         .ico { position:relative; width:34px; height:34px; border-radius:8px; background: var(--secondary-background-color);
@@ -4936,7 +4936,7 @@ class SchlueterManagerCard extends HTMLElement {
         .pchart { position:absolute; left:0; top:0; width:100%; height:100%; }
         .pchart .pa { fill: var(--primary-color); opacity:.10; }
         .pchart .pl { fill:none; stroke: var(--primary-color); stroke-width:1.5; opacity:.4; vector-effect:non-scaling-stroke; }
-        .ppeak { position:absolute; right:8px; top:2px; font-size:10px; color: var(--secondary-text-color); opacity:.8; }
+        .ppeak { position:absolute; left:50%; transform:translateX(-50%); top:1px; font-size:10px; line-height:1; white-space:nowrap; color: var(--secondary-text-color); opacity:.65; }
         .rows { padding: 0 10px 6px; flex:1; position:relative; z-index:1; }
         .row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:3px 0; font-size:13px;
           border-top: 1px solid var(--divider-color); cursor:pointer; }
@@ -5181,7 +5181,7 @@ class SchlueterManagerCard extends HTMLElement {
       };
     }
     const parts = this._deviceParts(d);
-    const cls = `dev${d.online ? '' : ' offline'}${d.heatingOn ? ' heat' : ''}`;
+    const cls = `dev${d.online ? '' : ' offline'}${d.heatingOn ? ' heat' : ''}${window.__hmcAct ? window.__hmcAct(this._hass, d.id) : ''}`;
     if (c.el.className !== cls) c.el.className = cls;
     const src = this._iconSrc(d);
     if (c.last.src !== src) {
@@ -6361,7 +6361,7 @@ class ShellyManagerCard extends HTMLElement {
         .grid { display:grid; gap:8px; grid-template-columns: repeat(auto-fill, minmax(var(--smc-min, 300px), 1fr)); }
         .dev { background: var(--ha-card-background, var(--card-background-color)); border-radius: var(--ha-card-border-radius, 12px);
           box-shadow: var(--ha-card-box-shadow, none); border: 1px solid var(--divider-color); display:flex; flex-direction:column; overflow:hidden; }
-        .dev.offline { opacity:.55; }
+        .dev.offline { opacity:.55; }${window.__hmcActCss || ''}
         .head { display:flex; align-items:center; gap:10px; padding:10px 8px 4px 10px; }
         .ico { position:relative; width:34px; height:34px; border-radius:8px; background: var(--secondary-background-color);
           display:flex; align-items:center; justify-content:center; flex:none; }
@@ -6415,7 +6415,7 @@ class ShellyManagerCard extends HTMLElement {
         .pchart { position:absolute; left:0; top:0; width:100%; height:100%; }
         .pchart .pa { fill: var(--primary-color); opacity:.10; }
         .pchart .pl { fill:none; stroke: var(--primary-color); stroke-width:1.5; opacity:.4; vector-effect:non-scaling-stroke; }
-        .ppeak { position:absolute; right:8px; top:2px; font-size:10px; color: var(--secondary-text-color); opacity:.8; }
+        .ppeak { position:absolute; left:50%; transform:translateX(-50%); top:1px; font-size:10px; line-height:1; white-space:nowrap; color: var(--secondary-text-color); opacity:.65; }
         .rows { padding: 0 10px 6px; flex:1; position:relative; z-index:1; }
         .row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:3px 0; font-size:13px;
           border-top: 1px solid var(--divider-color); cursor:pointer; }
@@ -6631,7 +6631,7 @@ class ShellyManagerCard extends HTMLElement {
       };
     }
     const parts = this._deviceParts(d);
-    const cls = `dev${d.online ? '' : ' offline'}`;
+    const cls = `dev${d.online ? '' : ' offline'}${window.__hmcAct ? window.__hmcAct(this._hass, d.id) : ''}`;
     if (c.el.className !== cls) c.el.className = cls;
     const src = this._iconSrc(d);
     if (c.last.src !== src) { c.img.classList.remove('fail'); c.img.src = src; c.last.src = src; }
@@ -7226,7 +7226,7 @@ class TasmotaManagerCard extends HTMLElement {
         .grid { display:grid; gap:8px; grid-template-columns: repeat(auto-fill, minmax(var(--tmc-min, 300px), 1fr)); }
         .dev { background: var(--ha-card-background, var(--card-background-color)); border-radius: var(--ha-card-border-radius, 12px);
           box-shadow: var(--ha-card-box-shadow, none); border: 1px solid var(--divider-color); display:flex; flex-direction:column; overflow:hidden; }
-        .dev.offline { opacity:.55; }
+        .dev.offline { opacity:.55; }${window.__hmcActCss || ''}
         .head { display:flex; align-items:center; gap:10px; padding:10px 8px 4px 10px; }
         .ico { position:relative; width:34px; height:34px; border-radius:8px; background: var(--secondary-background-color);
           display:flex; align-items:center; justify-content:center; flex:none; }
@@ -7557,7 +7557,7 @@ class TasmotaManagerCard extends HTMLElement {
     const canUpdate = d.update && !d.upd && hasTopic;
     const fwShort = (parseVersion(d.swFull) || []).slice(0, 3).join('.') || d.swFull || '–';
     return `
-      <div class="dev ${d.online ? '' : 'offline'}">
+      <div class="dev ${d.online ? '' : 'offline'}${window.__hmcAct ? window.__hmcAct(this._hass, d.id) : ''}">
         <div class="head">
           <div class="ico"><ha-icon icon="${DEVICE_ICON(d)}"></ha-icon><span class="dot"></span></div>
           <div class="name">${esc(d.name)}<small>${esc(d.area || 'kein Raum')}</small></div>
@@ -8375,6 +8375,39 @@ function morphChildren(a, b) {
 
 /* Gemeinsamer Speicher für per Label ausgeblendete Geräte und Entitäten (gilt für alle Karten und Browser).
  * Daten bleiben erhalten, die Methoden setzt jede Karte neu – so gilt immer der neueste Stand, egal welche Karte zuerst lädt. */
+/* Aktivität eines Geräts für die farbliche Hervorhebung der Gerätekacheln (gemeinsam für alle Karten):
+ * act-pw = verbraucht Strom bzw. heizt (rot), act-li = Licht an (gelb), act-sw = nur geschaltet (blau) */
+if (!window.__hmcAct) {
+  const SETTING = /power.?switch|lock|sperre|kindersicherung|led|anzeige|display|detect|motion|record|snapshot|modus|mode|sprinkler|zugriff|access|privacy|eco|auto|alarm|notification|benachricht/i;
+  const U = { W: 1, kW: 1000, MW: 1e6 };
+  let idxFor = null; let idx = {}; let resFor = null; let res = {};
+  window.__hmcAct = (hass, devId) => {
+    if (!hass || !devId || !hass.entities) return '';
+    if (idxFor !== hass.entities) {
+      idxFor = hass.entities; idx = {};
+      for (const e of Object.values(hass.entities)) if (e.device_id && !e.hidden && !e.disabled_by) (idx[e.device_id] ||= []).push(e);
+    }
+    if (resFor !== hass.states) { resFor = hass.states; res = {}; }
+    if (res[devId] !== undefined) return res[devId];
+    let watt = 0; let heat = false; let light = false; let sw = false;
+    for (const e of idx[devId] || []) {
+      const st = hass.states[e.entity_id];
+      if (!st) continue;
+      const dom = e.entity_id.split('.')[0]; const a = st.attributes;
+      if (dom === 'sensor' && a.device_class === 'power' && U[a.unit_of_measurement]) { const v = parseFloat(st.state); if (v > 0) watt = Math.max(watt, v * U[a.unit_of_measurement]); } else if (e.entity_category) continue;
+      else if (dom === 'climate' && ['heating', 'preheating'].includes(a.hvac_action)) heat = true;
+      else if (dom === 'light' && st.state === 'on') light = true;
+      else if (['switch', 'fan'].includes(dom) && st.state === 'on' && !SETTING.test(`${a.friendly_name || ''} ${e.entity_id}`)) sw = true;
+    }
+    res[devId] = heat || watt >= 10 ? ' act-pw' : light ? ' act-li' : sw ? ' act-sw' : '';
+    return res[devId];
+  };
+  window.__hmcActCss = `
+    .dev.act-pw { background: color-mix(in srgb, #f44336 13%, var(--ha-card-background, var(--card-background-color))); border-color: color-mix(in srgb, #f44336 45%, transparent); }
+    .dev.act-li { background: color-mix(in srgb, #ffc107 16%, var(--ha-card-background, var(--card-background-color))); border-color: color-mix(in srgb, #ffc107 50%, transparent); }
+    .dev.act-sw { background: color-mix(in srgb, #03a9f4 13%, var(--ha-card-background, var(--card-background-color))); border-color: color-mix(in srgb, #03a9f4 45%, transparent); }`;
+}
+
 const HIDE = window.__aocHideStore = Object.assign(window.__aocHideStore || {
   label: 'dashboard_ausgeblendet', ids: new Set(), ents: new Set(), ref: null, eref: null, busy: false, subs: new Set(), ver: 0,
 }, {
@@ -8651,7 +8684,7 @@ class AreaOverviewCard extends HTMLElement {
         .grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fill, minmax(var(--aoc-min, 300px), 1fr)); }
         .dev { background: var(--ha-card-background, var(--card-background-color)); border-radius: var(--ha-card-border-radius, 12px);
           box-shadow: var(--ha-card-box-shadow, none); border: 1px solid var(--divider-color); display:flex; flex-direction:column; overflow:hidden; }
-        .dev.offline { opacity:.55; }
+        .dev.offline { opacity:.55; }${window.__hmcActCss || ''}
         .dev.hidden-dev { opacity:.5; border-style:dashed; }
         .row.hidrow { opacity:.5; }
         .row .rhide { padding:2px; margin-left:4px; flex:none; } .row .rhide ha-icon { --mdc-icon-size:16px; }
@@ -9045,7 +9078,7 @@ class AreaOverviewCard extends HTMLElement {
         if (c.hb.firstElementChild.getAttribute('icon') !== hi) c.hb.firstElementChild.setAttribute('icon', hi);
         c.hb.title = d.loose ? (hid ? 'Alle wieder einblenden' : 'Alle im Dashboard ausblenden') : (hid ? 'Wieder einblenden' : 'Im Dashboard ausblenden');
       }
-      const cls = `dev${d.online ? '' : ' offline'}${hid ? ' hidden-dev' : ''}`;
+      const cls = `dev${d.online ? '' : ' offline'}${hid ? ' hidden-dev' : ''}${d.loose ? '' : window.__hmcAct(this._hass, d.id)}`;
       if (c.el.className !== cls) c.el.className = cls;
       c.ico.classList.toggle('on', d.on);
       if (c.icon.getAttribute('icon') !== d.icon) c.icon.setAttribute('icon', d.icon);
@@ -9383,7 +9416,7 @@ if (!customElements.get('home-summary-card')) {
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.6.2';
+const VERSION = '2.6.3';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -9527,7 +9560,7 @@ const STYLE = `
   .si .bub ha-icon { --mdc-icon-size: 24px; color: var(--secondary-text-color); }
   .si.on .bub { background: color-mix(in srgb, var(--c) 22%, transparent); }
   .si.on .bub ha-icon { color: var(--c); }
-  .si.alert .bub { animation: pulse 1.6s infinite; }
+  .si.alert .bub, .si.blink .bub { animation: pulse 1.6s infinite; }
   @keyframes pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--c) 25%, transparent); } }
   .si .l { font-size: 12px; color: var(--secondary-text-color); line-height:1.2; }
   .si.on .l { color: var(--primary-text-color); font-weight:500; }
@@ -10020,7 +10053,9 @@ class HomeDashboardCard extends HTMLElement {
     const hass = this._hass;
     const d = this._data;
     const items = [];
-    const si = (k, icon, color, label, n, on, alert = false, act = 'pop') => items.push(`<div class="card si click ${on ? 'on' : ''} ${alert ? 'alert' : ''}" data-k="${k}"
+    // Kacheln mit aktiven Geräten pulsieren wie die DWD-Warnung
+    const BLINK = ['lights', 'heat', 'open', 'covers', 'switches'];
+    const si = (k, icon, color, label, n, on, alert = false, act = 'pop') => items.push(`<div class="card si click ${on ? 'on' : ''} ${alert ? 'alert' : ''} ${on && BLINK.includes(k) ? 'blink' : ''}" data-k="${k}"
       ${act === 'pop' ? `data-pop="${k}"` : `data-more="${esc(act)}"`} style="--c:${color}">
       <div class="bub"><ha-icon icon="${icon}"></ha-icon></div>${n ? `<span class="cnt">${n}</span>` : ''}<div class="l">${esc(label)}</div></div>`);
     si('lights', d.lights.length ? 'mdi:lightbulb-on' : 'mdi:lightbulb-outline', '#ffc107', d.lights.length ? 'Licht an' : 'Licht aus', d.lights.length, d.lights.length > 0);
@@ -10306,8 +10341,9 @@ class HomeDashboardCard extends HTMLElement {
     if (sw.length) { const n = sw.filter((s) => s.state === 'on').length; ic(n ? 'mdi:toggle-switch' : 'mdi:toggle-switch-off-outline', '#03a9f4', n, n > 0, `${n} von ${sw.length} Schaltern an`); }
     const cov = of('cover');
     if (cov.length) { const n = cov.filter((s) => s.state !== 'closed').length; ic(n ? 'mdi:window-shutter-open' : 'mdi:window-shutter', '#9c27b0', n, n > 0, `${n} von ${cov.length} Rollos offen`); }
-    const media = of('media_player');
-    if (media.length) { const n = media.filter((s) => s.state === 'playing').length; ic(n ? 'mdi:play-circle' : 'mdi:speaker', '#2196f3', n, n > 0, n ? 'Wiedergabe' : 'Medien'); }
+    // Mediengeräte nur bei laufender Wiedergabe
+    const media = of('media_player').filter((s) => s.state === 'playing');
+    if (media.length) ic('mdi:play-circle', '#2196f3', media.length, true, `${media.length} Wiedergabe${media.length > 1 ? 'n' : ''}`);
     const open = sts.filter((s) => s.entity_id.startsWith('binary_sensor.') && OPEN_DC.includes(s.attributes.device_class));
     if (open.some((s) => s.state === 'on')) { const n = open.filter((s) => s.state === 'on').length; ic('mdi:window-open-variant', '#2196f3', n, true, `${n} offen`); }
     const cams = this._areaCams(a.area_id).map((id) => hass.states[id]);
@@ -10793,4 +10829,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.7.2 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.7.3 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');

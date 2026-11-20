@@ -560,7 +560,7 @@ class EsphomeManagerCard extends HTMLElement {
         .grid { display:grid; gap:8px; align-items:start; grid-template-columns: repeat(auto-fill, minmax(var(--emc-min, 320px), 1fr)); }
         .dev { background: var(--ha-card-background, var(--card-background-color)); border-radius: var(--ha-card-border-radius, 12px);
           box-shadow: var(--ha-card-box-shadow, none); border: 1px solid var(--divider-color); display:flex; flex-direction:column; overflow:hidden; }
-        .dev.offline { opacity:.55; }
+        .dev.offline { opacity:.55; }${window.__hmcActCss || ''}
         .head { display:flex; align-items:center; gap:10px; padding:10px 8px 4px 10px; }
         .ico { position:relative; width:34px; height:34px; border-radius:8px; background: var(--secondary-background-color);
           display:flex; align-items:center; justify-content:center; flex:none; }
@@ -803,7 +803,7 @@ class EsphomeManagerCard extends HTMLElement {
       c.vals.style.display = 'contents';
     }
     const parts = this._deviceParts(d);
-    const cls = `dev${d.online ? '' : ' offline'}`;
+    const cls = `dev${d.online ? '' : ' offline'}${window.__hmcAct ? window.__hmcAct(this._hass, d.id) : ''}`;
     if (c.el.className !== cls) c.el.className = cls;
     const heat = d.climates.some((x) => x.st.attributes.hvac_action === 'heating');
     c.ico.className = `ico${heat ? ' heat' : ''}`;

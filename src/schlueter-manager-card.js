@@ -354,7 +354,7 @@ class SchlueterManagerCard extends HTMLElement {
         .grid { display:grid; gap:8px; grid-template-columns: repeat(auto-fill, minmax(var(--smc-min, 280px), 1fr)); }
         .dev { background: var(--ha-card-background, var(--card-background-color)); border-radius: var(--ha-card-border-radius, 12px);
           box-shadow: var(--ha-card-box-shadow, none); border: 1px solid var(--divider-color); display:flex; flex-direction:column; overflow:hidden; }
-        .dev.offline { opacity:.55; }
+        .dev.offline { opacity:.55; }${window.__hmcActCss || ''}
         .dev.heat .ico ha-icon { color: var(--state-climate-heat-color, #ff8100); }
         .head { display:flex; align-items:center; gap:10px; padding:10px 8px 4px 10px; }
         .ico { position:relative; width:34px; height:34px; border-radius:8px; background: var(--secondary-background-color);
@@ -396,7 +396,7 @@ class SchlueterManagerCard extends HTMLElement {
         .pchart { position:absolute; left:0; top:0; width:100%; height:100%; }
         .pchart .pa { fill: var(--primary-color); opacity:.10; }
         .pchart .pl { fill:none; stroke: var(--primary-color); stroke-width:1.5; opacity:.4; vector-effect:non-scaling-stroke; }
-        .ppeak { position:absolute; right:8px; top:2px; font-size:10px; color: var(--secondary-text-color); opacity:.8; }
+        .ppeak { position:absolute; left:50%; transform:translateX(-50%); top:1px; font-size:10px; line-height:1; white-space:nowrap; color: var(--secondary-text-color); opacity:.65; }
         .rows { padding: 0 10px 6px; flex:1; position:relative; z-index:1; }
         .row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:3px 0; font-size:13px;
           border-top: 1px solid var(--divider-color); cursor:pointer; }
@@ -641,7 +641,7 @@ class SchlueterManagerCard extends HTMLElement {
       };
     }
     const parts = this._deviceParts(d);
-    const cls = `dev${d.online ? '' : ' offline'}${d.heatingOn ? ' heat' : ''}`;
+    const cls = `dev${d.online ? '' : ' offline'}${d.heatingOn ? ' heat' : ''}${window.__hmcAct ? window.__hmcAct(this._hass, d.id) : ''}`;
     if (c.el.className !== cls) c.el.className = cls;
     const src = this._iconSrc(d);
     if (c.last.src !== src) {
