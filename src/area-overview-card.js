@@ -58,37 +58,59 @@ function morphChildren(a, b) {
 
 /* Gemeinsamer Speicher für per Label ausgeblendete Geräte und Entitäten (gilt für alle Karten und Browser).
  * Daten bleiben erhalten, die Methoden setzt jede Karte neu – so gilt immer der neueste Stand, egal welche Karte zuerst lädt. */
-/* Aktivität eines Geräts für die farbliche Hervorhebung der Gerätekacheln (gemeinsam für alle Karten):
- * act-pw = verbraucht Strom bzw. heizt (rot), act-li = Licht an (gelb), act-sw = nur geschaltet (blau) */
-if (!window.__hmcAct) {
+/* Aktivität eines Geräts für die Hervorhebung der Gerätekacheln (gemeinsam für alle Karten).
+ * Farbig (Standard): act-pw = verbraucht Strom/heizt/läuft (rot), act-li = Licht an (gelb), act-sw = nur geschaltet (blau),
+ * act-srv = Server/Pi-hole aktiv (lila). Mit input_boolean.dashboard_farben = aus: aktive Geräte hell, inaktive gedimmt (act-off). */
+{
   const SETTING = /power.?switch|lock|sperre|kindersicherung|led|anzeige|display|detect|motion|record|snapshot|modus|mode|sprinkler|zugriff|access|privacy|eco|auto|alarm|notification|benachricht/i;
   const U = { W: 1, kW: 1000, MW: 1e6 };
+  const SRV = ['proxmoxve', 'pi_hole'];
   let idxFor = null; let idx = {}; let resFor = null; let res = {};
-  window.__hmcAct = (hass, devId) => {
-    if (!hass || !devId || !hass.entities) return '';
+  window.__hmcColorEntity = window.__hmcColorEntity || 'input_boolean.dashboard_farben';
+  /** { a: 'pw'|'li'|'sw'|'srv'|'', cap: Gerät kann aktiv sein } */
+  window.__hmcActRaw = (hass, devId) => {
+    if (!hass || !devId || !hass.entities) return { a: '', cap: false };
     if (idxFor !== hass.entities) {
       idxFor = hass.entities; idx = {};
       for (const e of Object.values(hass.entities)) if (e.device_id && !e.hidden && !e.disabled_by) (idx[e.device_id] ||= []).push(e);
     }
     if (resFor !== hass.states) { resFor = hass.states; res = {}; }
-    if (res[devId] !== undefined) return res[devId];
-    let watt = 0; let heat = false; let light = false; let sw = false;
+    if (res[devId]) return res[devId];
+    let watt = 0; let run = false; let light = false; let sw = false; let cap = false; let srv = null; let online = false;
     for (const e of idx[devId] || []) {
       const st = hass.states[e.entity_id];
       if (!st) continue;
-      const dom = e.entity_id.split('.')[0]; const a = st.attributes;
-      if (dom === 'sensor' && a.device_class === 'power' && U[a.unit_of_measurement]) { const v = parseFloat(st.state); if (v > 0) watt = Math.max(watt, v * U[a.unit_of_measurement]); } else if (e.entity_category) continue;
-      else if (dom === 'climate' && ['heating', 'preheating'].includes(a.hvac_action)) heat = true;
-      else if (dom === 'light' && st.state === 'on') light = true;
-      else if (['switch', 'fan'].includes(dom) && st.state === 'on' && !SETTING.test(`${a.friendly_name || ''} ${e.entity_id}`)) sw = true;
+      const dom = e.entity_id.split('.')[0]; const a = st.attributes; const on = st.state === 'on';
+      if (st.state !== 'unavailable') online = true;
+      if (SRV.includes(e.platform)) {
+        srv ||= e.platform;
+        if (e.platform === 'pi_hole' && dom === 'switch' && !e.entity_category) srv = on ? 'on' : srv === 'on' ? 'on' : 'pi_hole';
+        if (e.platform === 'proxmoxve' && dom === 'binary_sensor' && ['running', 'connectivity', 'power'].includes(a.device_class)) srv = on ? 'on' : srv === 'on' ? 'on' : 'proxmoxve';
+        continue;
+      }
+      if (dom === 'sensor' && a.device_class === 'power' && U[a.unit_of_measurement]) { cap = true; const v = parseFloat(st.state); if (v > 0) watt = Math.max(watt, v * U[a.unit_of_measurement]); continue; }
+      if (dom === 'binary_sensor' && a.device_class === 'smoke') { cap = true; if (on) run = true; continue; }
+      if (e.entity_category) continue;
+      if (dom === 'climate') { cap = true; if (['heating', 'preheating'].includes(a.hvac_action)) run = true; } else if (dom === 'light') { cap = true; if (on) light = true; } else if (['switch', 'fan'].includes(dom) && !SETTING.test(`${a.friendly_name || ''} ${e.entity_id}`)) { cap = true; if (on) sw = true; } else if (dom === 'binary_sensor' && ['running', 'power', 'plug'].includes(a.device_class)) { cap = true; if (on) run = true; } else if (dom === 'sensor' && a.device_class === 'enum' && /^(running|in_use|programmed|active|main_wash|drying|rinse|spin)$/i.test(st.state)) { cap = true; run = true; }
     }
-    res[devId] = heat || watt >= 10 ? ' act-pw' : light ? ' act-li' : sw ? ' act-sw' : '';
-    return res[devId];
+    // Server/Pi-hole: aktiv = läuft (Proxmox) bzw. Blockieren an (Pi-hole); ohne Status-Entität reicht „erreichbar“
+    if (srv) return (res[devId] = { a: srv === 'on' || (srv === 'proxmoxve' && online && !(idx[devId] || []).some((e) => e.entity_id.startsWith('binary_sensor.'))) ? 'srv' : '', cap: true });
+    return (res[devId] = { a: run || watt >= 10 ? 'pw' : light ? 'li' : sw ? 'sw' : '', cap });
   };
+  /** Klassen je nach Modus: farbig oder hell/dunkel */
+  window.__hmcCls = (hass, a, cap) => {
+    const color = hass?.states?.[window.__hmcColorEntity]?.state !== 'off';
+    if (color) return a ? ` act-${a}` : '';
+    return !a && cap ? ' act-off' : '';
+  };
+  window.__hmcAct = (hass, devId) => { const r = window.__hmcActRaw(hass, devId); return window.__hmcCls(hass, r.a, r.cap); };
+  const T = (c, p) => `background: color-mix(in srgb, ${c} ${p}%, var(--ha-card-background, var(--card-background-color))); border-color: color-mix(in srgb, ${c} 45%, transparent);`;
   window.__hmcActCss = `
-    .dev.act-pw { background: color-mix(in srgb, #f44336 13%, var(--ha-card-background, var(--card-background-color))); border-color: color-mix(in srgb, #f44336 45%, transparent); }
-    .dev.act-li { background: color-mix(in srgb, #ffc107 16%, var(--ha-card-background, var(--card-background-color))); border-color: color-mix(in srgb, #ffc107 50%, transparent); }
-    .dev.act-sw { background: color-mix(in srgb, #03a9f4 13%, var(--ha-card-background, var(--card-background-color))); border-color: color-mix(in srgb, #03a9f4 45%, transparent); }`;
+    .dev.act-pw { ${T('#f44336', 13)} }
+    .dev.act-li { ${T('#ffc107', 16)} }
+    .dev.act-sw { ${T('#03a9f4', 13)} }
+    .dev.act-srv { ${T('#9c27b0', 13)} }
+    .dev.act-off { opacity:.55; filter: saturate(.6); }`;
 }
 
 const HIDE = window.__aocHideStore = Object.assign(window.__aocHideStore || {

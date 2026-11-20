@@ -142,7 +142,14 @@ popup_dim: 20       # Abdunklung des Dashboards hinter dem Popup in %
 
 ## Hervorhebung aktiver Geräte
 
-Gerätekacheln (Shelly, Tasmota, ESPHome, Schlüter und Raum-Popups) werden farblich hinterlegt, solange das Gerät aktiv ist:
-rot, wenn es Strom verbraucht (ab 10 W) oder heizt; gelb, wenn ein Licht an ist; blau, wenn es nur eingeschaltet ist.
-In der Statusleiste pulsieren Licht, Heizung, Fenster, Rollos und Schalter, sobald mindestens ein Gerät aktiv ist.
-Mediengeräte erscheinen in der Raumkachel nur während einer Wiedergabe.
+Gerätekacheln (Shelly, Tasmota, ESPHome, Schlüter, Proxmox, Pi-hole und Raum-Popups) werden hinterlegt, solange das Gerät aktiv ist:
+rot bei Verbrauch ab 10 W, Heizen, laufendem Haushaltsgerät oder Rauchalarm; gelb bei Licht an; blau, wenn es nur eingeschaltet ist;
+lila für laufende Server (Proxmox) und Pi-hole mit aktivem Blockieren.
+
+Der Helfer `input_boolean.dashboard_farben` ([`examples/dashboard_farben.yaml`](examples/dashboard_farben.yaml)) schaltet die Farben ab:
+dann werden aktive Geräte hell und inaktive gedimmt dargestellt. Ohne Helfer sind die Farben an; eine andere Entität setzt `color_entity`.
+
+In der Statusleiste pulsieren Licht, Heizung, Fenster, Rollos, Schalter und das offene Ventil, sobald etwas aktiv ist.
+Die Raumkacheln zeigen zusätzlich Boiler, Waschmaschine, Trockner, Backofen, Kochfeld, Dampfgarer, Geschirrspüler, Rauchmelder
+und Server mit Anzahl (erkannt am Gerätenamen; Messdose und Gerät zählen zusammen als eines), aktive farbig.
+Mediengeräte erscheinen dort nur während einer Wiedergabe.

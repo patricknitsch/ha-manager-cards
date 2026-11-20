@@ -1,0 +1,7 @@
+# Paket: farbige Hervorhebung aktiver Geräte im Dashboard ein-/ausschalten
+# an  = aktive Geräte farbig (rot Verbrauch/Heizen, gelb Licht, blau geschaltet, lila Server/Pi-hole)
+# aus = aktive Geräte hell, inaktive gedimmt
+input_boolean:
+  dashboard_farben:
+    name: "Dashboard: farbige Hervorhebung"
+    icon: mdi:palette

@@ -18,10 +18,11 @@
  *   admin_only: [pi_hole, proxmoxve, xsense]   # Integrationen nur für Administratoren (Links, Räume, Zähler)
  *   links: [{ …, admin: true }]                # einzelnen Link nur Administratoren zeigen
  *   popup_opacity: 50                         # Deckkraft der Popups in % (100 = deckend), popup_blur: 10 (px), popup_dim: 20 (% Abdunklung)
+ *   color_entity: input_boolean.dashboard_farben   # farbige Hervorhebung an/aus (aus = aktiv hell, inaktiv gedimmt)
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.6.3';
+const VERSION = '2.7.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -37,7 +38,20 @@ const WX = {
 };
 // Schalter, die eine Last schalten: Steckdosen, Messdosen, Relais, Beleuchtung, Pumpen (keine Einstellungsschalter)
 const SW_LOAD = /schaltdose|steckdose|messdose|zwischenstecker|relais|relay|plug|socket|outlet|beleuchtung|lampe|pumpe|lüfter|luefter|ventilator/i;
-const DWD_COLOR =['var(--disabled-color, #9e9e9e)', '#ffeb3b', '#ff9800', '#f44336', '#9c27b0'];
+// Gerätegruppen in der Raumkachel (Anzahl, aktiv hervorgehoben); Reihenfolge zählt (Dampfgarer vor Backofen)
+const APPS = [
+  { k: 'boiler', re: /boiler|hei(ß|ss)wasser|warmwasser/i, icon: 'mdi:water-boiler', name: 'Boiler', c: '#f44336' },
+  { k: 'washer', re: /waschmaschine|washing.?machine|washer/i, icon: 'mdi:washing-machine', name: 'Waschmaschine', c: '#f44336' },
+  { k: 'dryer', re: /trockner|dryer/i, icon: 'mdi:tumble-dryer', name: 'Trockner', c: '#f44336' },
+  { k: 'steam', re: /dampfgarer|steam/i, icon: 'mdi:pot-steam', name: 'Dampfgarer', c: '#f44336' },
+  { k: 'dish', re: /geschirrsp(ü|u|ue)ler|dishwasher/i, icon: 'mdi:dishwasher', name: 'Geschirrspüler', c: '#f44336' },
+  { k: 'oven', re: /backofen|oven/i, icon: 'mdi:toaster-oven', name: 'Backofen', c: '#f44336' },
+  { k: 'hob', re: /kochfeld|\bherd\b|cooktop|\bhob\b/i, icon: 'mdi:stove', name: 'Kochfeld', c: '#f44336' },
+  { k: 'smoke', re: /rauchmelder|smoke|^rm\b/i, icon: 'mdi:smoke-detector-variant', name: 'Rauchmelder', c: '#f44336' },
+  { k: 'server', re: /server|proxmox|\bnas\b|synology|pi-?hole/i, icon: 'mdi:server', name: 'Server', c: '#9c27b0' },
+];
+const PLUG = /messdose|steckdose|zwischenstecker|plug/i;
+const DWD_COLOR = ['var(--disabled-color, #9e9e9e)', '#ffeb3b', '#ff9800', '#f44336', '#9c27b0'];
 const DWD_TEXT = ['keine Warnung', 'Wetterwarnung', 'Markantes Wetter', 'Unwetterwarnung', 'Extremes Unwetter'];
 
 /* DOM abgleichen statt neu aufbauen (verhindert Flackern). Knoten mit data-keep behalten ihren Inhalt. */
@@ -343,6 +357,7 @@ class HomeDashboardCard extends HTMLElement {
     this._config = { exclude_areas: [], cameras: {}, area_power: {}, links: [], makers: [], power: {}, warnings: [],
       solar_forecast: true, battery_low: 20, hide_label: 'dashboard_ausgeblendet', ...config };
     HIDE.label = this._config.hide_label;
+    if (this._config.color_entity) window.__hmcColorEntity = this._config.color_entity;
     if (!this.shadowRoot) this._build();
     this._camEls = this._camEls || {};
   }
@@ -660,7 +675,7 @@ class HomeDashboardCard extends HTMLElement {
     const items = [];
     // Kacheln mit aktiven Geräten pulsieren wie die DWD-Warnung
     const BLINK = ['lights', 'heat', 'open', 'covers', 'switches'];
-    const si = (k, icon, color, label, n, on, alert = false, act = 'pop') => items.push(`<div class="card si click ${on ? 'on' : ''} ${alert ? 'alert' : ''} ${on && BLINK.includes(k) ? 'blink' : ''}" data-k="${k}"
+    const si = (k, icon, color, label, n, on, alert = false, act = 'pop', blink = on && BLINK.includes(k)) => items.push(`<div class="card si click ${on ? 'on' : ''} ${alert ? 'alert' : ''} ${blink ? 'blink' : ''}" data-k="${k}"
       ${act === 'pop' ? `data-pop="${k}"` : `data-more="${esc(act)}"`} style="--c:${color}">
       <div class="bub"><ha-icon icon="${icon}"></ha-icon></div>${n ? `<span class="cnt">${n}</span>` : ''}<div class="l">${esc(label)}</div></div>`);
     si('lights', d.lights.length ? 'mdi:lightbulb-on' : 'mdi:lightbulb-outline', '#ffc107', d.lights.length ? 'Licht an' : 'Licht aus', d.lights.length, d.lights.length > 0);
@@ -677,7 +692,7 @@ class HomeDashboardCard extends HTMLElement {
     if (v) {
       const open = ['open', 'opening', 'on'].includes(v.state);
       const bad = BAD.includes(v.state);
-      si('valve', open ? 'mdi:valve-open' : 'mdi:valve-closed', open ? '#00bcd4' : '#f44336', bad ? 'Ventil ?' : open ? 'Ventil offen' : 'Ventil zu', 0, !bad, !open && !bad, this._config.valve);
+      si('valve', open ? 'mdi:valve-open' : 'mdi:valve-closed', open ? '#00bcd4' : '#f44336', bad ? 'Ventil ?' : open ? 'Ventil offen' : 'Ventil zu', 0, !bad, !open && !bad, this._config.valve, open);
     }
     if ((this._config.warnings || []).length) {
       const ws = this._warnings();
@@ -951,12 +966,35 @@ class HomeDashboardCard extends HTMLElement {
     if (media.length) ic('mdi:play-circle', '#2196f3', media.length, true, `${media.length} Wiedergabe${media.length > 1 ? 'n' : ''}`);
     const open = sts.filter((s) => s.entity_id.startsWith('binary_sensor.') && OPEN_DC.includes(s.attributes.device_class));
     if (open.some((s) => s.state === 'on')) { const n = open.filter((s) => s.state === 'on').length; ic('mdi:window-open-variant', '#2196f3', n, true, `${n} offen`); }
+    for (const g of this._appsOf(a.area_id)) {
+      ic(g.icon, g.c, g.n, g.act > 0, `${g.name}: ${g.n}${g.act ? `, ${g.act} aktiv` : ''}`);
+    }
     const cams = this._areaCams(a.area_id).map((id) => hass.states[id]);
     if (cams.length) {
       out.push(`<span class="ic camic ${cams.some((s) => !BAD.includes(s.state)) ? 'on' : ''}" style="--c:#009688" data-cams="${esc(a.area_id)}"
         title="${cams.length > 1 ? `${cams.length} Kameras` : 'Kamera'}"><ha-icon icon="mdi:cctv"></ha-icon>${cams.length > 1 ? cams.length : ''}</span>`);
     }
     return out.join('');
+  }
+
+  /** Gerätegruppen eines Raums: Anzahl (Messdose und Gerät selbst zählen als eines) und Anzahl aktiv */
+  _appsOf(areaId) {
+    const hass = this._hass;
+    if (this._apFor !== hass.devices || this._apSt !== hass.states || this._apHide !== HIDE.ver) { this._apFor = hass.devices; this._apSt = hass.states; this._apHide = HIDE.ver; this._apC = {}; }
+    if (this._apC[areaId]) return this._apC[areaId];
+    const groups = {};
+    for (const d of Object.values(hass.devices || {})) {
+      if (d.area_id !== areaId || d.disabled_by || d.entry_type === 'service' || HIDE.ids.has(d.id) || HIDE.restrictedDev?.(d.id)) continue;
+      const name = `${d.name_by_user || d.name || ''} ${d.model || ''}`;
+      const g = APPS.find((x) => x.re.test(name));
+      if (!g) continue;
+      const r = window.__hmcActRaw ? window.__hmcActRaw(hass, d.id) : { a: '' };
+      const x = (groups[g.k] ||= { g, plug: 0, dev: 0, act: 0 });
+      if (PLUG.test(name)) x.plug++; else x.dev++;
+      if (r.a) x.act++;
+    }
+    const out = APPS.filter((g) => groups[g.k]).map((g) => { const x = groups[g.k]; const n = Math.max(x.plug, x.dev); return { ...g, n, act: Math.min(x.act, n) }; });
+    return (this._apC[areaId] = out);
   }
 
   /** alle Kameras eines Bereichs: konfigurierte zuerst, dann zugeordnete (auch ausgeblendete) */

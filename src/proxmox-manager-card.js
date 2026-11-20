@@ -347,7 +347,7 @@ class ProxmoxManagerCard extends HTMLElement {
         .ico { position:relative; width:34px; height:34px; border-radius:8px; background: var(--success-color, #43a047);
           display:flex; align-items:center; justify-content:center; flex:none; }
         .ico ha-icon { --mdc-icon-size:22px; color:#fff; }
-        .dev.stopped .ico { background: var(--disabled-color, #9e9e9e); }
+        .dev.stopped .ico { background: var(--disabled-color, #9e9e9e); }${window.__hmcActCss || ''}
         .dev.offline .ico { background: var(--error-color, #db4437); }
         .dot { position:absolute; right:-3px; bottom:-3px; width:11px; height:11px; border-radius:50%;
           border:2px solid var(--card-background-color); background: var(--success-color, #43a047); }
@@ -664,7 +664,7 @@ class ProxmoxManagerCard extends HTMLElement {
       };
     }
     const parts = this._deviceParts(d);
-    const cls = `dev${d.type === 'node' && !d.online ? ' offline' : !d.running ? ' stopped' : ''}`;
+    const cls = `dev${d.type === 'node' && !d.online ? ' offline' : !d.running ? ' stopped' : ''}${window.__hmcCls ? window.__hmcCls(this._hass, (d.type === 'node' ? d.online : d.running) ? 'srv' : '', true) : ''}`;
     if (c.el.className !== cls) c.el.className = cls;
     if (c.icon.getAttribute('icon') !== TYPE_ICON[d.type]) c.icon.setAttribute('icon', TYPE_ICON[d.type]);
     for (const k of ['name', 'stat', 'meta', 'chips', 'rows', 'foot']) {

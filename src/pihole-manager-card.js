@@ -55,7 +55,7 @@ const STYLE = `
   .grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fill, minmax(var(--phc-min, 320px), 1fr)); }
   .dev { background: var(--ha-card-background, var(--card-background-color)); border-radius: var(--ha-card-border-radius, 12px);
     box-shadow: var(--ha-card-box-shadow, none); border: 1px solid var(--divider-color); display:flex; flex-direction:column; overflow:hidden; }
-  .dev.offline { opacity:.55; }
+  .dev.offline { opacity:.55; }${window.__hmcActCss || ''}
   .head { display:flex; align-items:center; gap:12px; padding:14px 14px 6px; }
   .ico { position:relative; width:44px; height:44px; border-radius:10px; background: var(--secondary-background-color);
     display:flex; align-items:center; justify-content:center; flex:none; }
@@ -281,7 +281,7 @@ class PiholeManagerCard extends HTMLElement {
     if (!d.online) chips.push('<span class="chip err"><ha-icon icon="mdi:lan-disconnect"></ha-icon>nicht erreichbar</span>');
     const can = d.sw_ && !BAD.includes(d.sw_.st.state);
     const pauses = (this._config.pause || []).map((m) => `<button class="pbtn" data-act="pause" data-e="${d.sw_?.id || ''}" data-m="${m}" data-n="${esc(d.name)}" ${can && d.enabled ? '' : 'disabled'} title="Blockieren ${m} min pausieren"><ha-icon icon="mdi:timer-pause-outline"></ha-icon>${m}′</button>`).join('');
-    const cls = `dev${d.online ? '' : ' offline'}${d.enabled === false ? ' paused' : ''}`;
+    const cls = `dev${d.online ? '' : ' offline'}${d.enabled === false ? ' paused' : ''}${window.__hmcCls ? window.__hmcCls(this._hass, d.online && d.enabled !== false ? 'srv' : '', true) : ''}`;
     return `<div class="${cls}" data-k="${d.id}">
       <div class="head"><div class="ico"><ha-icon icon="mdi:pi-hole"></ha-icon><span class="dot"></span></div>
         <div class="name">${esc(d.name)}<small>${esc([d.host, d.area].filter(Boolean).join(' · ') || 'Pi-hole')}</small></div>
