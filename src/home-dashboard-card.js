@@ -23,7 +23,7 @@
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.7.5';
+const VERSION = '2.7.6';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -897,7 +897,8 @@ class HomeDashboardCard extends HTMLElement {
         || (dom === 'binary_sensor' && ['running', 'power', 'plug'].includes(a.device_class) && s === 'on')
         || (dom === 'sensor' && /^(running|in_use|programmed|on|active)$/i.test(s) && a.device_class === 'enum');
     };
-    act = ids.filter((id) => devs[id].some(isAct)).length;
+    // dieselben Geräte, die auf den Seiten eingefärbt sind (gemeinsame Erkennung); Rückfall auf die eigene Prüfung
+    act = window.__hmcActRaw ? ids.filter((id) => window.__hmcActRaw(hass, id).a).length : ids.filter((id) => devs[id].some(isAct)).length;
     return (this._lsCache[integration] = { n: ids.length, off, upd, act });
   }
 

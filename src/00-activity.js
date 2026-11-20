@@ -22,7 +22,7 @@
     if (resFor !== hass.states) { resFor = hass.states; res = {}; }
     if (res[devId]) return res[devId];
     const dv = hass.devices?.[devId]; const names = `${dv?.name_by_user || ''} ${dv?.name || ''}`;
-    let watt = 0; let run = false; let light = false; let sw = false; let cap = false; let srv = null; let online = false; let on2 = false; let water = false; let clim = false; let psw = false; let xs = false;
+    let watt = 0; let run = false; let light = false; let sw = false; let cap = false; let srv = null; let online = false; let on2 = false; let water = false; let clim = false; let psw = false; let xs = false; let pwr = null; let plat = null;
     for (const e of idx[devId] || []) {
       const st = hass.states[e.entity_id];
       if (!st) continue;
@@ -30,7 +30,7 @@
       if (st.state !== 'unavailable') online = true;
       if (e.platform === 'xsense') xs = true;
       if (SRV.includes(e.platform)) {
-        srv ||= e.platform;
+        srv ||= e.platform; if (e.platform === 'proxmoxve' || !plat) plat = e.platform;
         if (e.platform === 'pi_hole' && dom === 'switch' && !e.entity_category) srv = on ? 'on' : srv === 'on' ? 'on' : 'pi_hole';
         if (e.platform === 'proxmoxve' && dom === 'binary_sensor' && ['running', 'connectivity', 'power'].includes(a.device_class)) srv = on ? 'on' : srv === 'on' ? 'on' : 'proxmoxve';
         continue;
@@ -39,15 +39,19 @@
       // Wassergeräte: Ventil offen, Durchfluss, Pumpe/Bewässerung läuft
       if (dom === 'valve' || (dom === 'sensor' && a.device_class === 'volume_flow_rate')) { cap = true; if (st.state === 'open' || st.state === 'opening' || parseFloat(st.state) > 0) water = true; if (st.state !== 'unavailable') on2 = true; continue; }
       if (dom === 'binary_sensor' && a.device_class === 'smoke') { cap = true; if (on) run = true; if (st.state !== 'unavailable') on2 = true; continue; }
+      // eigene Ein/Aus-Anzeige des Geräts (Samsung „Betrieb“, Miele-Schalter „Ein/Aus“) hat Vorrang vor Statuswerten
+      if (dom === 'binary_sensor' && a.device_class === 'power') { cap = true; if (st.state !== 'unavailable') pwr = (pwr || false) || on; continue; }
+      if (dom === 'switch' && /ein.?aus|on.?off/i.test(`${a.friendly_name || ''} ${e.entity_id}`)) { cap = true; if (st.state !== 'unavailable') pwr = (pwr || false) || on; }
       if (e.entity_category) continue;
-      if (dom === 'sensor' && a.device_class === 'enum' && !/^(off|aus|unknown|unavailable|not_connected|disconnected|none|stop|-)$/i.test(st.state)) on2 = true;
-      if (dom === 'climate') { clim = true; cap = true; if (st.state !== 'off' && st.state !== 'unavailable') on2 = true; if (['heating', 'preheating'].includes(a.hvac_action)) run = true; } else if (dom === 'light') { cap = true; if (on) light = true; } else if (['switch', 'fan'].includes(dom) && !SETTING.test(`${a.friendly_name || ''} ${e.entity_id}`)) { cap = true; if (PSW.test(`${a.friendly_name || ''} ${e.entity_id}`)) { if (on) psw = true; } else if (on) sw = true; } else if (dom === 'binary_sensor' && ['running', 'power', 'plug'].includes(a.device_class)) { cap = true; if (on) run = true; } else if (dom === 'sensor' && a.device_class === 'enum' && /^(running|in_use|programmed|active|main_wash|drying|rinse|spin)$/i.test(st.state)) { cap = true; run = true; }
+      if (dom === 'sensor' && a.device_class === 'enum' && /status|zustand|state|phase/i.test(e.entity_id) && !/standby|push|fernsteuer|remote|diagnose/i.test(e.entity_id)
+        && !/^(off|aus|unknown|unavailable|not_connected|disconnected|none|stop|standby|-)$/i.test(st.state)) on2 = true;
+      if (dom === 'climate') { clim = true; cap = true; if (st.state !== 'off' && st.state !== 'unavailable') on2 = true; if (['heating', 'preheating'].includes(a.hvac_action)) run = true; } else if (dom === 'light') { cap = true; if (on) light = true; } else if (['switch', 'fan'].includes(dom) && !SETTING.test(`${a.friendly_name || ''} ${e.entity_id}`)) { cap = true; if (PSW.test(`${a.friendly_name || ''} ${e.entity_id}`)) { if (on) psw = true; } else if (on) sw = true; } else if (dom === 'binary_sensor' && a.device_class === 'running') { cap = true; if (on) run = true; } else if (dom === 'sensor' && a.device_class === 'enum' && /^(running|in_use|programmed|active|main_wash|drying|rinse|spin)$/i.test(st.state)) { cap = true; run = true; }
     }
     // Server/Pi-hole: aktiv = läuft (Proxmox) bzw. Blockieren an (Pi-hole); ohne Status-Entität reicht „erreichbar“
-    if (srv) { const up = srv === 'on' || (srv === 'proxmoxve' && online && !(idx[devId] || []).some((e) => e.entity_id.startsWith('binary_sensor.'))); return (res[devId] = { a: up ? (srv === 'proxmoxve' ? 'srv' : 'ph') : '', cap: true, on: up, p: (idx[devId] || []).some((e) => e.platform === 'proxmoxve') ? 'proxmoxve' : 'pi_hole' }); }
+    if (srv) { const up = srv === 'on' || (srv === 'proxmoxve' && online && !(idx[devId] || []).some((e) => e.entity_id.startsWith('binary_sensor.'))); return (res[devId] = { a: up ? (plat === 'proxmoxve' ? 'srv' : 'ph') : '', cap: true, on: up, p: plat }); }
     if (psw && !clim) sw = true; // „Power Switch“ ohne Thermostat = Ausgang einer Schaltdose
     const act = run || watt >= 10 ? 'pw' : xs && online ? 'xs' : water ? 'wa' : light ? 'li' : sw ? (WATER.test(names) ? 'wa' : 'sw') : '';
-    return (res[devId] = { a: act, cap, on: !!act || on2 || watt >= 1 });
+    return (res[devId] = { a: act, cap, on: !!act || (pwr !== null ? pwr : on2 || watt >= 1) });
   };
   /** Farbe je Aktivität – dieselben Werte für Kacheln und Raumsymbole */
   window.__hmcColors = { pw: '#f44336', wa: '#2196f3', li: '#ffc107', sw: '#4caf50', srv: '#9c27b0', ph: '#ff9800', xs: '#ff9800' };
