@@ -28,7 +28,7 @@
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.10.0';
+const VERSION = '2.10.1';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -196,6 +196,13 @@ const STYLE = `
   }
   /* layout: sidebar_links – links Kopf und Seiten, rechts Status als Kopfzeile, Haus und die Räume allein */
   @media (min-width: 1100px) {
+    /* Seitenleiste und Statuszeile als leicht abgesetzte Flächen mit Rahmen (Tönung über --panel-tint) */
+    .page.sl .side, .page.sl .main > .stat { border-radius: var(--r); border: 1px solid color-mix(in srgb, var(--primary-color) 28%, var(--divider-color));
+      background: color-mix(in srgb, var(--primary-color) var(--panel-tint, 7%), var(--ha-card-background, var(--card-background-color)));
+      box-shadow: var(--ha-card-box-shadow, none); }
+    .page.sl .side { margin: 8px 0 8px 0; height: calc(var(--hmc-vh, calc(100vh - 56px)) - 16px); padding: 14px 10px 10px; border-right-width: 1px; }
+    .page.sl .main > .stat { padding: 8px; }
+    .page.sl .main > .stat .si { background: var(--ha-card-background, var(--card-background-color)); }
     .page.sl .side { height: var(--hmc-vh, calc(100vh - 56px)); }
     .page.sl #linksec { display:flex; flex-direction:column; flex:1; min-height:0; }
     .page.sl #linksec .links { flex:1; min-height:0; overflow-y:auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 2px 4px 6px 2px; }

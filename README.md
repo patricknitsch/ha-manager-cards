@@ -169,3 +169,4 @@ Links zu ESPHome, Grohe, LocalThings, Miele, Schlüter, Shelly, Tasmota, X-Sense
 - **Seitenleiste:** Ab 1100 px Breite stehen Uhr, Datum mit Kalenderwoche, Begrüßung, Wetter, Termine und Status links in einer festen Spalte,
   rechts Haus, Seiten und Räume (`layout: stacked` für die alte Anordnung; Breite über `--side-w`, Höhe über `--hmc-vh`).
 - **Seiten links:** `layout: sidebar_links` stellt links Kopf und Seiten dar, rechts die Status-Symbole als Kopfzeile, darunter Haus und die Räume allein (mehrspaltig, scrollbar).
+  Seitenleiste und Statuszeile sind leicht getönt und gerahmt; die Tönung stellt die CSS-Variable `--panel-tint` ein (Standard 7 %).
