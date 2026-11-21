@@ -1,6 +1,6 @@
 {
   "name": "ha-manager-cards",
-  "version": "1.8.9",
+  "version": "1.8.10",
   "description": "Geräteseiten (Manager Cards) und Übersichts-Dashboard für Home Assistant im Stil des ioBroker Device Managers",
   "private": true,
   "type": "module",
