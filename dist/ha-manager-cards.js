@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.10.0 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.11.0 – 13 Karten: esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== 00-activity.js ===== */
 {
@@ -9468,11 +9468,12 @@ if (!customElements.get('home-summary-card')) {
  *   color_entity: input_boolean.dashboard_farben   # farbige Hervorhebung an/aus (aus = aktiv hell, inaktiv gedimmt)
  *   calendars: [calendar.familywall]           # heutige Termine im Header (Standard: alle Kalender); calendar_max: 6
  *   scroll_sections: true                      # Seiten und Räume getrennt scrollbar; section_height: 'calc(100vh - 150px)'
- *   layout: sidebar                            # sidebar (Standard, ab 1100 px: links Uhr/Kopf/Status, rechts Haus/Seiten/Räume) | stacked
+ *   layout: sidebar                            # sidebar (Standard, ab 1100 px: links Uhr/Kopf/Status, rechts Haus/Seiten/Räume)
+ *                                              # | sidebar_links (links Kopf + Seiten, rechts Status-Kopfzeile, Haus, Räume) | stacked
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.9.0';
+const VERSION = '2.10.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -9637,6 +9638,18 @@ const STYLE = `
     .page.sb .cols { flex:1; min-height:0; align-items: stretch; }
     .page.sb .cols > section { display:flex; flex-direction:column; min-height:0; height:100%; }
     .page.sb .cols.scroll .links, .page.sb .cols.scroll .rooms { max-height:none; flex:1; min-height:0; }
+  }
+  /* layout: sidebar_links – links Kopf und Seiten, rechts Status als Kopfzeile, Haus und die Räume allein */
+  @media (min-width: 1100px) {
+    .page.sl .side { height: var(--hmc-vh, calc(100vh - 56px)); }
+    .page.sl #linksec { display:flex; flex-direction:column; flex:1; min-height:0; }
+    .page.sl #linksec .links { flex:1; min-height:0; overflow-y:auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 2px 4px 6px 2px; }
+    .page.sl .main .stat { grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); }
+    .page.sl .main .si { flex-direction: column; align-items:center; gap:6px; padding: 10px 6px 8px; text-align:center; }
+    .page.sl .main .si .cnt { position:absolute; order:0; }
+    .page.sl .main .si .l { font-size:12px; flex:none; }
+    .page.sl .cols { grid-template-columns: minmax(0, 1fr); }
+    .page.sl .rooms { display:grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); align-content:start; }
   }
 
   /* Kopf */
@@ -10629,10 +10642,32 @@ class HomeDashboardCard extends HTMLElement {
     this._camPop = null;
   }
 
+  /** Anordnung: sidebar (Standard), sidebar_links (Seiten links, Status als Kopf rechts, Räume allein) oder stacked.
+   *  Die Seitenleisten-Varianten gelten ab 1100 px; schmaler bleibt alles untereinander in der gewohnten Reihenfolge. */
+  _layout() {
+    const r = this.shadowRoot; const page = r.querySelector('.page');
+    if (!page) return;
+    const lay = this._config.layout || 'sidebar';
+    this._mq ||= window.matchMedia('(min-width: 1100px)');
+    if (!this._mqBound) { this._mqBound = true; this._mq.addEventListener('change', () => this._layout()); }
+    const wide = this._mq.matches;
+    const sl = lay === 'sidebar_links' && wide;
+    page.classList.toggle('sb', lay !== 'stacked');
+    page.classList.toggle('sl', sl);
+    const side = r.querySelector('.side'); const main = r.querySelector('.main');
+    const stat = r.getElementById('stat'); const linksec = r.getElementById('linksec'); const haussec = r.getElementById('haussec'); const cols = r.querySelector('.cols');
+    if (sl) {
+      if (linksec.parentNode !== side) side.appendChild(linksec);
+      if (stat.parentNode !== main) main.insertBefore(stat, haussec);
+    } else {
+      if (stat.parentNode !== side) side.appendChild(stat);
+      if (linksec.parentNode !== cols) cols.insertBefore(linksec, cols.firstChild);
+    }
+  }
+
   _renderRooms() {
     const hass = this._hass;
-    const page = this.shadowRoot.querySelector('.page');
-    if (page) page.classList.toggle('sb', this._config.layout !== 'stacked');
+    this._layout();
     const cols = this.shadowRoot.querySelector('.cols');
     if (cols) {
       cols.classList.toggle('scroll', this._config.scroll_sections !== false);
@@ -11052,4 +11087,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.10.0 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.11.0 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
