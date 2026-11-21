@@ -163,6 +163,8 @@ Links zu ESPHome, Grohe, LocalThings, Miele, Schlüter, Shelly, Tasmota, X-Sense
 ## Start-Dashboard: Termine, Netzbezug, Scrollen
 
 - **Termine:** Der Header zeigt die heutigen Termine (ganztägige zuerst, vergangene blass). `calendars: [calendar.x]` wählt Kalender aus (Standard: alle), `calendar_max: 6` begrenzt die Anzahl.
-- **Netzbezug:** Der Haus-Graph zeigt den Netzbezug (positiver Teil von `power.grid`) als lila Fläche.
+- **Netz:** Der Haus-Graph zeigt `power.grid` mit Vorzeichen als lila Fläche: Bezug oberhalb, Einspeisung unterhalb der Nulllinie.
 - **Scrollen:** Seiten und Räume scrollen getrennt in Bildschirmhöhe (`section_height`, Standard `calc(100vh - 150px)`); `scroll_sections: false` schaltet das ab.
 
+- **Seitenleiste:** Ab 1100 px Breite stehen Uhr, Datum mit Kalenderwoche, Begrüßung, Wetter, Termine und Status links in einer festen Spalte,
+  rechts Haus, Seiten und Räume (`layout: stacked` für die alte Anordnung; Breite über `--side-w`, Höhe über `--hmc-vh`).

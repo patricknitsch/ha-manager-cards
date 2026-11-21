@@ -23,10 +23,11 @@
  *   color_entity: input_boolean.dashboard_farben   # farbige Hervorhebung an/aus (aus = aktiv hell, inaktiv gedimmt)
  *   calendars: [calendar.familywall]           # heutige Termine im Header (Standard: alle Kalender); calendar_max: 6
  *   scroll_sections: true                      # Seiten und Räume getrennt scrollbar; section_height: 'calc(100vh - 150px)'
+ *   layout: sidebar                            # sidebar (Standard, ab 1100 px: links Uhr/Kopf/Status, rechts Haus/Seiten/Räume) | stacked
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.8.0';
+const VERSION = '2.9.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -163,6 +164,36 @@ const STYLE = `
     scrollbar-width: thin; padding: 2px 4px 6px 2px; margin: -2px -4px 0 -2px; }
   @media (max-width: 700px) { .cols { grid-template-columns: minmax(0, 0.8fr) minmax(0, 2fr); gap: 10px; } }
 
+  .side, .main { display:flex; flex-direction:column; gap: var(--gap); min-width:0; }
+  .clock { display:none; }
+  /* Seitenleiste (layout: sidebar, Standard): links Uhr, Begrüßung, Wetter, Termine, Status; rechts Haus, Seiten und Räume.
+     Schmaler als 1100 px bleibt alles untereinander. */
+  @media (min-width: 1100px) {
+    .page.sb { display:grid; grid-template-columns: var(--side-w, 300px) minmax(0, 1fr); align-items:start; max-width: none; padding-top: 0; }
+    .page.sb .side { position:sticky; top:0; max-height: var(--hmc-vh, calc(100vh - 56px)); overflow-y:auto; scrollbar-width: thin;
+      padding: 14px 10px 14px 4px; border-right: 1px solid var(--divider-color); }
+    .page.sb .main { height: var(--hmc-vh, calc(100vh - 56px)); padding-top: 8px; }
+    .page.sb .clock { display:flex; flex-direction:column; gap:2px; padding: 0 4px; }
+    .page.sb .clock b { font-size: 58px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+    .page.sb .clock small { font-size: 15px; color: var(--secondary-text-color); }
+    .page.sb .clock .kw { font-weight: 600; color: var(--primary-text-color); margin-top: 6px; }
+    .page.sb .hdr { flex-wrap: wrap; gap: 10px; padding: 0 4px; align-items: flex-start; }
+    .page.sb .av { width:44px; height:44px; } .page.sb .av ha-icon { --mdc-icon-size:24px; }
+    .page.sb .greet .g { font-size: 18px; white-space: normal; }
+    .page.sb .greet .s { display:none; }
+    .page.sb .cal { flex-direction:column; flex-wrap:nowrap; margin-top: 8px; }
+    .page.sb .cal .ev { border-radius: 10px; padding: 6px 10px; }
+    .page.sb .stat { grid-template-columns: 1fr; gap: 6px; }
+    .page.sb .si { flex-direction: row; justify-content:flex-start; gap: 12px; padding: 8px 12px; text-align:left; }
+    .page.sb .si .bub { width: 36px; height: 36px; } .page.sb .si .bub ha-icon { --mdc-icon-size: 20px; }
+    .page.sb .si .l { font-size: 14px; flex:1; }
+    .page.sb .si .cnt { position: static; order: 3; }
+    /* rechts: Haus oben, Seiten und Räume füllen den Rest und scrollen getrennt */
+    .page.sb .cols { flex:1; min-height:0; align-items: stretch; }
+    .page.sb .cols > section { display:flex; flex-direction:column; min-height:0; height:100%; }
+    .page.sb .cols.scroll .links, .page.sb .cols.scroll .rooms { max-height:none; flex:1; min-height:0; }
+  }
+
   /* Kopf */
   .hdr { display:flex; align-items:center; gap:16px; padding: 4px 4px 0; }
   .av { width:60px; height:60px; border-radius:50%; background: var(--secondary-background-color) center/cover; flex:none; cursor:pointer;
@@ -217,7 +248,9 @@ const STYLE = `
   .chart .grid line { stroke: var(--divider-color); stroke-width:1; vector-effect: non-scaling-stroke; }
   .chart .pv { fill: color-mix(in srgb, #ffc107 22%, transparent); stroke:#ffc107; stroke-width:2; vector-effect: non-scaling-stroke; }
   .chart .use { fill:none; stroke:#f44336; stroke-width:2; vector-effect: non-scaling-stroke; }
-  .chart .grd { fill: color-mix(in srgb, #9c27b0 12%, transparent); stroke:#9c27b0; stroke-width:1.5; vector-effect: non-scaling-stroke; }
+  .chart .grd { fill: color-mix(in srgb, #9c27b0 14%, transparent); stroke:#9c27b0; stroke-width:1.5; vector-effect: non-scaling-stroke; }
+  .chart .zero { stroke: var(--secondary-text-color); stroke-width:1; opacity:.6; vector-effect: non-scaling-stroke; }
+  .chart .ymin { position:absolute; bottom:-2px; left:0; font-size:11px; color: var(--secondary-text-color); background: var(--ha-card-background, var(--card-background-color)); padding: 0 4px 0 0; }
   .chart .fc { fill:none; stroke:#4caf50; stroke-width:2; stroke-dasharray: 6 4; opacity:.95; vector-effect: non-scaling-stroke; }
   .chart .cs { fill:none; stroke: var(--secondary-text-color); stroke-width:1.5; stroke-dasharray: 3 4; opacity:.7; vector-effect: non-scaling-stroke; }
   .chart .now { stroke: var(--secondary-text-color); stroke-width:1; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; }
@@ -533,13 +566,14 @@ class HomeDashboardCard extends HTMLElement {
   _build() {
     this.attachShadow({ mode: 'open' }).innerHTML = `<style>${STYLE}</style>
       <div class="page">
-        <div id="hdr"></div>
-        <div id="stat" class="stat"></div>
-        <section id="haussec"><h2>Haus</h2><div id="haus" class="card haus click" data-pop="power"></div></section>
-        <div class="cols">
-          <section id="linksec"><h2>Seiten</h2><div id="links" class="links"></div></section>
-          <section><h2>Räume <small id="rcount"></small></h2><div id="rooms" class="rooms"></div></section>
-        </div>
+        <aside class="side"><div id="hdr"></div><div id="stat" class="stat"></div></aside>
+        <main class="main">
+          <section id="haussec"><h2>Haus</h2><div id="haus" class="card haus click" data-pop="power"></div></section>
+          <div class="cols">
+            <section id="linksec"><h2>Seiten</h2><div id="links" class="links"></div></section>
+            <section><h2>Räume <small id="rcount"></small></h2><div id="rooms" class="rooms"></div></section>
+          </div>
+        </main>
       </div>`;
     this.shadowRoot.querySelector('.page').addEventListener('click', (e) => this._onClick(e));
   }
@@ -685,7 +719,9 @@ class HomeDashboardCard extends HTMLElement {
     const w = hass.states[this._config.weather];
     const pic = p?.attributes.entity_picture;
     const t = w?.attributes.temperature;
-    const html = `<div class="hdr">
+    const kw = (() => { const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())); const dn = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - dn); const y0 = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); return Math.ceil(((d - y0) / 86400000 + 1) / 7); })();
+    const clock = `<div class="clock"><b>${now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</b><small>${esc(now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }))}</small><small class="kw">KW ${kw}</small></div>`;
+    const html = `${clock}<div class="hdr">
       <div class="av ${p && p.state !== 'home' ? 'away' : ''}" data-more="${esc(this._personId)}" ${pic ? `style="background-image:url('${esc(pic)}')"` : ''}>${pic ? '' : '<ha-icon icon="mdi:account"></ha-icon>'}</div>
       <div class="greet"><div class="gl"><div class="g">${esc(greet)}</div>
         ${w ? `<div class="wx" data-more="${esc(this._config.weather)}" title="${esc(w.attributes.friendly_name || '')}"><ha-icon icon="${WX[w.state] || 'mdi:weather-cloudy'}"></ha-icon><span>${t != null ? `${nf(t)}°` : '–'}</span></div>` : ''}</div><div class="s">${esc(now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }))} · <span class="tm">${now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr</span></div>${this._calHtml()}</div></div>`;
@@ -783,7 +819,7 @@ class HomeDashboardCard extends HTMLElement {
         <div class="t"><small>Stromverbrauch</small><b>${fW(house)}</b></div><div class="vals">${vals.join('')}</div></div>
       <div class="chart">${this._chart()}</div>
       <div class="ax"><span>0 Uhr</span><span>6</span><span>12</span><span>18</span><span>24 Uhr</span></div>
-      <div class="leg"><span><i style="background:#f44336"></i>Verbrauch</span><span><i style="background:#ffc107"></i>PV</span>${pw.grid ? '<span><i style="background:#9c27b0"></i>Netzbezug</span>' : ''}${fc || pw.forecast ? '<span><i style="background:repeating-linear-gradient(90deg,#4caf50 0 6px,transparent 6px 10px)"></i>PV-Prognose</span>' : ''}${pw.clearsky ? '<span><i style="background:repeating-linear-gradient(90deg,var(--secondary-text-color) 0 3px,transparent 3px 7px)"></i>Clearsky</span>' : ''}</div>`;
+      <div class="leg"><span><i style="background:#f44336"></i>Verbrauch</span><span><i style="background:#ffc107"></i>PV</span>${pw.grid ? '<span><i style="background:#9c27b0"></i>Netz (Bezug + / Einspeisung −)</span>' : ''}${fc || pw.forecast ? '<span><i style="background:repeating-linear-gradient(90deg,#4caf50 0 6px,transparent 6px 10px)"></i>PV-Prognose</span>' : ''}${pw.clearsky ? '<span><i style="background:repeating-linear-gradient(90deg,var(--secondary-text-color) 0 3px,transparent 3px 7px)"></i>Clearsky</span>' : ''}</div>`;
     this._set('haus', html);
   }
 
@@ -804,26 +840,30 @@ class HomeDashboardCard extends HTMLElement {
     const pw = this._config.power || {};
     const series = (id) => (this._hist?.[id] || []).filter((p) => p.t >= t0);
     const use = series(pw.house); const pv = series(pw.pv);
-    // Netzbezug: nur positive Werte des Netzsensors (negativ = Einspeisung)
-    const grid = series(pw.grid).map((p) => ({ t: p.t, v: Math.max(0, p.v) }));
+    // Netz mit Vorzeichen: Bezug oberhalb, Einspeisung unterhalb der Nulllinie
+    const grid = series(pw.grid);
     const inDay = (pts) => (pts || []).filter((p) => p.t >= t0 && p.t <= t0 + span);
     const fc = inDay(this._attrCurve(pw.forecast, 'watts') || this._fc?.points);
     const cs = inDay(this._attrCurve(pw.clearsky, 'watts_clearsky'));
     const hi = Math.max(500, ...use.map((p) => p.v), ...pv.map((p) => p.v), ...grid.map((p) => p.v), ...fc.map((p) => p.v), ...cs.map((p) => p.v)) * 1.08;
+    const lo = Math.min(0, ...grid.map((p) => p.v)) * 1.08;
     const x = (t) => (((t - t0) / span) * W).toFixed(1);
-    const y = (v) => (H - (Math.max(0, v) / hi) * H).toFixed(1);
-    const line = (pts) => pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.t)},${y(p.v)}`).join('');
+    const y = (v) => (H - ((v - lo) / (hi - lo)) * H).toFixed(1);
+    const yv = (v) => y(Math.max(0, v)); // Verbrauch, PV, Prognose nie unter null
+    const line = (pts, f = yv) => pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.t)},${f(p.v)}`).join('');
+    const y0 = y(0);
     const now = Date.now();
     let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><g class="grid">`;
     for (const f of [0.25, 0.5, 0.75]) svg += `<line x1="0" x2="${W}" y1="${(H * f).toFixed(1)}" y2="${(H * f).toFixed(1)}"/>`;
     svg += '</g>';
-    if (pv.length > 1) svg += `<path class="pv" d="${line(pv)}L${x(pv[pv.length - 1].t)},${H}L${x(pv[0].t)},${H}Z"/>`;
+    if (lo < 0) svg += `<line class="zero" x1="0" x2="${W}" y1="${y0}" y2="${y0}"/>`;
+    if (pv.length > 1) svg += `<path class="pv" d="${line(pv)}L${x(pv[pv.length - 1].t)},${y0}L${x(pv[0].t)},${y0}Z"/>`;
     if (cs.length > 1) svg += `<path class="cs" d="${line(cs)}"/>`;
     if (fc.length > 1) svg += `<path class="fc" d="${line(fc)}"/>`;
-    if (grid.length > 1) svg += `<path class="grd" d="${line(grid)}"/>`;
+    if (grid.length > 1) svg += `<path class="grd" d="${line(grid, y)}L${x(grid[grid.length - 1].t)},${y0}L${x(grid[0].t)},${y0}Z"/>`;
     if (use.length > 1) svg += `<path class="use" d="${line(use)}"/>`;
     svg += `<line class="now" x1="${x(now)}" x2="${x(now)}" y1="0" y2="${H}"/></svg>`;
-    return `${svg}<span class="ymax">${fW(hi / 1.08)}</span>`;
+    return `${svg}<span class="ymax">${fW(hi / 1.08)}</span>${lo < 0 ? `<span class="ymin">−${fW(-lo / 1.08)}</span>` : ''}`;
   }
 
   async _fetchHist() {
@@ -1146,6 +1186,8 @@ class HomeDashboardCard extends HTMLElement {
 
   _renderRooms() {
     const hass = this._hass;
+    const page = this.shadowRoot.querySelector('.page');
+    if (page) page.classList.toggle('sb', this._config.layout !== 'stacked');
     const cols = this.shadowRoot.querySelector('.cols');
     if (cols) {
       cols.classList.toggle('scroll', this._config.scroll_sections !== false);
