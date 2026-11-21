@@ -21,10 +21,12 @@
  *   popup_opacity: 50                         # Deckkraft der Popups in % (100 = deckend), popup_blur: 10 (px), popup_dim: 20 (% Abdunklung)
  *   color_strength: 24                         # Farbstärke der Gerätehervorhebung in % (Rahmen = doppelt + 20)
  *   color_entity: input_boolean.dashboard_farben   # farbige Hervorhebung an/aus (aus = aktiv hell, inaktiv gedimmt)
+ *   calendars: [calendar.familywall]           # heutige Termine im Header (Standard: alle Kalender); calendar_max: 6
+ *   scroll_sections: true                      # Seiten und Räume getrennt scrollbar; section_height: 'calc(100vh - 150px)'
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.7.9';
+const VERSION = '2.8.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -156,6 +158,9 @@ const STYLE = `
   /* Kopf, Status-Icons und Haus über die volle Breite; darunter Seiten und Räume immer nebeneinander */
   .cols { display:grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--gap); align-items:start; }
   .cols > section { min-width:0; }
+  /* Seiten und Räume scrollen getrennt, ohne die ganze Seite zu verschieben (scroll_sections: false schaltet ab) */
+  .cols.scroll .links, .cols.scroll .rooms { max-height: var(--sec-h, calc(100vh - 150px)); overflow-y:auto; overscroll-behavior: contain;
+    scrollbar-width: thin; padding: 2px 4px 6px 2px; margin: -2px -4px 0 -2px; }
   @media (max-width: 700px) { .cols { grid-template-columns: minmax(0, 0.8fr) minmax(0, 2fr); gap: 10px; } }
 
   /* Kopf */
@@ -212,11 +217,18 @@ const STYLE = `
   .chart .grid line { stroke: var(--divider-color); stroke-width:1; vector-effect: non-scaling-stroke; }
   .chart .pv { fill: color-mix(in srgb, #ffc107 22%, transparent); stroke:#ffc107; stroke-width:2; vector-effect: non-scaling-stroke; }
   .chart .use { fill:none; stroke:#f44336; stroke-width:2; vector-effect: non-scaling-stroke; }
+  .chart .grd { fill: color-mix(in srgb, #9c27b0 12%, transparent); stroke:#9c27b0; stroke-width:1.5; vector-effect: non-scaling-stroke; }
   .chart .fc { fill:none; stroke:#4caf50; stroke-width:2; stroke-dasharray: 6 4; opacity:.95; vector-effect: non-scaling-stroke; }
   .chart .cs { fill:none; stroke: var(--secondary-text-color); stroke-width:1.5; stroke-dasharray: 3 4; opacity:.7; vector-effect: non-scaling-stroke; }
   .chart .now { stroke: var(--secondary-text-color); stroke-width:1; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; }
   .ax { display:flex; justify-content:space-between; font-size: 11px; color: var(--secondary-text-color); padding: 2px 0 0; }
   .leg { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color: var(--secondary-text-color); }
+  .cal { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .cal .ev { display:inline-flex; align-items:center; gap:5px; font-size:12.5px; padding: 3px 9px; border-radius: 12px; cursor:pointer;
+    background: color-mix(in srgb, var(--primary-color) 14%, transparent); max-width: 100%; }
+  .cal .ev ha-icon { --mdc-icon-size:15px; color: var(--primary-color); flex:none; }
+  .cal .ev b { font-weight:600; flex:none; } .cal .ev span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cal .ev.past { opacity:.5; }
   .leg i { display:inline-block; width:14px; height:3px; border-radius:2px; vertical-align:middle; margin-right:5px; }
 
   /* Links */
@@ -377,7 +389,7 @@ class HomeDashboardCard extends HTMLElement {
 
   connectedCallback() {
     clearInterval(this._tick);
-    this._tick = setInterval(() => { this._renderHeader(); this._fetchHist(); this._fetchForecast(); this._renderHaus(); this._fetchLog(); this._fetchSys(); }, 30000);
+    this._tick = setInterval(() => { this._renderHeader(); this._fetchCal(); this._fetchHist(); this._fetchForecast(); this._renderHaus(); this._fetchLog(); this._fetchSys(); }, 30000);
     this._onHide = () => this._render();
     HIDE.subs.add(this._onHide);
   }
@@ -391,6 +403,7 @@ class HomeDashboardCard extends HTMLElement {
     this._render();
     if (this._pop) this._updatePopup();
     if (this._camPop) for (const c of this._camPop.els) c.hass = hass;
+    if (!this._calTs) this._fetchCal();
     if (!this._histTs) this._fetchHist();
     if (!this._fcTs) this._fetchForecast();
     if (!this._logTs) this._fetchLog();
@@ -675,8 +688,44 @@ class HomeDashboardCard extends HTMLElement {
     const html = `<div class="hdr">
       <div class="av ${p && p.state !== 'home' ? 'away' : ''}" data-more="${esc(this._personId)}" ${pic ? `style="background-image:url('${esc(pic)}')"` : ''}>${pic ? '' : '<ha-icon icon="mdi:account"></ha-icon>'}</div>
       <div class="greet"><div class="gl"><div class="g">${esc(greet)}</div>
-        ${w ? `<div class="wx" data-more="${esc(this._config.weather)}" title="${esc(w.attributes.friendly_name || '')}"><ha-icon icon="${WX[w.state] || 'mdi:weather-cloudy'}"></ha-icon><span>${t != null ? `${nf(t)}°` : '–'}</span></div>` : ''}</div><div class="s">${esc(now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }))} · <span class="tm">${now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr</span></div></div></div>`;
+        ${w ? `<div class="wx" data-more="${esc(this._config.weather)}" title="${esc(w.attributes.friendly_name || '')}"><ha-icon icon="${WX[w.state] || 'mdi:weather-cloudy'}"></ha-icon><span>${t != null ? `${nf(t)}°` : '–'}</span></div>` : ''}</div><div class="s">${esc(now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }))} · <span class="tm">${now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr</span></div>${this._calHtml()}</div></div>`;
     this._set('hdr', html);
+  }
+
+  /** heutige Termine aus den Kalendern (calendars: [...], Standard: alle) */
+  _calHtml() {
+    const ev = this._cal || [];
+    if (!ev.length) return '';
+    const now = Date.now();
+    const hm = (d) => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    return `<div class="cal">${ev.map((e) => `<div class="ev ${e.end <= now ? 'past' : ''}" data-more="${esc(e.cal)}" title="${esc(e.summary)}${e.loc ? ` · ${esc(e.loc)}` : ''}">
+      <ha-icon icon="${e.allDay ? 'mdi:calendar-today' : 'mdi:clock-outline'}"></ha-icon>${e.allDay ? '' : `<b>${hm(new Date(e.start))}</b>`}<span>${esc(e.summary)}</span></div>`).join('')}</div>`;
+  }
+
+  async _fetchCal() {
+    const hass = this._hass;
+    if (!hass || this._calBusy || (this._calTs && Date.now() - this._calTs < 10 * 60000)) return;
+    const ids = this._config.calendars || Object.keys(hass.states).filter((id) => id.startsWith('calendar.'));
+    if (!ids.length) return;
+    this._calBusy = true;
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    const d1 = new Date(d0.getTime() + 24 * 3600000);
+    const ms = (v) => new Date(v.dateTime || v.date || v).getTime();
+    try {
+      const all = [];
+      for (const id of ids) {
+        try {
+          const res = await hass.callApi('GET', `calendars/${id}?start=${encodeURIComponent(d0.toISOString())}&end=${encodeURIComponent(d1.toISOString())}`);
+          for (const e of res || []) {
+            const allDay = !!(e.start?.date && !e.start?.dateTime);
+            all.push({ cal: id, summary: e.summary || '(ohne Titel)', loc: e.location || '', allDay, start: allDay ? d0.getTime() : ms(e.start), end: allDay ? d1.getTime() : ms(e.end) });
+          }
+        } catch (err) { /* Kalender nicht lesbar */ }
+      }
+      this._cal = all.sort((a, b) => (b.allDay - a.allDay) || a.start - b.start).slice(0, this._config.calendar_max || 6);
+      this._calTs = Date.now();
+      this._renderHeader();
+    } finally { this._calBusy = false; }
   }
 
   _renderStatus() {
@@ -734,7 +783,7 @@ class HomeDashboardCard extends HTMLElement {
         <div class="t"><small>Stromverbrauch</small><b>${fW(house)}</b></div><div class="vals">${vals.join('')}</div></div>
       <div class="chart">${this._chart()}</div>
       <div class="ax"><span>0 Uhr</span><span>6</span><span>12</span><span>18</span><span>24 Uhr</span></div>
-      <div class="leg"><span><i style="background:#f44336"></i>Verbrauch</span><span><i style="background:#ffc107"></i>PV</span>${fc || pw.forecast ? '<span><i style="background:repeating-linear-gradient(90deg,#4caf50 0 6px,transparent 6px 10px)"></i>PV-Prognose</span>' : ''}${pw.clearsky ? '<span><i style="background:repeating-linear-gradient(90deg,var(--secondary-text-color) 0 3px,transparent 3px 7px)"></i>Clearsky</span>' : ''}</div>`;
+      <div class="leg"><span><i style="background:#f44336"></i>Verbrauch</span><span><i style="background:#ffc107"></i>PV</span>${pw.grid ? '<span><i style="background:#9c27b0"></i>Netzbezug</span>' : ''}${fc || pw.forecast ? '<span><i style="background:repeating-linear-gradient(90deg,#4caf50 0 6px,transparent 6px 10px)"></i>PV-Prognose</span>' : ''}${pw.clearsky ? '<span><i style="background:repeating-linear-gradient(90deg,var(--secondary-text-color) 0 3px,transparent 3px 7px)"></i>Clearsky</span>' : ''}</div>`;
     this._set('haus', html);
   }
 
@@ -755,10 +804,12 @@ class HomeDashboardCard extends HTMLElement {
     const pw = this._config.power || {};
     const series = (id) => (this._hist?.[id] || []).filter((p) => p.t >= t0);
     const use = series(pw.house); const pv = series(pw.pv);
+    // Netzbezug: nur positive Werte des Netzsensors (negativ = Einspeisung)
+    const grid = series(pw.grid).map((p) => ({ t: p.t, v: Math.max(0, p.v) }));
     const inDay = (pts) => (pts || []).filter((p) => p.t >= t0 && p.t <= t0 + span);
     const fc = inDay(this._attrCurve(pw.forecast, 'watts') || this._fc?.points);
     const cs = inDay(this._attrCurve(pw.clearsky, 'watts_clearsky'));
-    const hi = Math.max(500, ...use.map((p) => p.v), ...pv.map((p) => p.v), ...fc.map((p) => p.v), ...cs.map((p) => p.v)) * 1.08;
+    const hi = Math.max(500, ...use.map((p) => p.v), ...pv.map((p) => p.v), ...grid.map((p) => p.v), ...fc.map((p) => p.v), ...cs.map((p) => p.v)) * 1.08;
     const x = (t) => (((t - t0) / span) * W).toFixed(1);
     const y = (v) => (H - (Math.max(0, v) / hi) * H).toFixed(1);
     const line = (pts) => pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.t)},${y(p.v)}`).join('');
@@ -769,6 +820,7 @@ class HomeDashboardCard extends HTMLElement {
     if (pv.length > 1) svg += `<path class="pv" d="${line(pv)}L${x(pv[pv.length - 1].t)},${H}L${x(pv[0].t)},${H}Z"/>`;
     if (cs.length > 1) svg += `<path class="cs" d="${line(cs)}"/>`;
     if (fc.length > 1) svg += `<path class="fc" d="${line(fc)}"/>`;
+    if (grid.length > 1) svg += `<path class="grd" d="${line(grid)}"/>`;
     if (use.length > 1) svg += `<path class="use" d="${line(use)}"/>`;
     svg += `<line class="now" x1="${x(now)}" x2="${x(now)}" y1="0" y2="${H}"/></svg>`;
     return `${svg}<span class="ymax">${fW(hi / 1.08)}</span>`;
@@ -778,7 +830,7 @@ class HomeDashboardCard extends HTMLElement {
     const hass = this._hass;
     if (!hass || this._histBusy || (this._histTs && Date.now() - this._histTs < 5 * 60000)) return;
     const pw = this._config.power || {};
-    const main = [pw.house, pw.pv].filter((id) => id && hass.states[id]);
+    const main = [pw.house, pw.pv, pw.grid].filter((id) => id && hass.states[id]);
     const rooms = this._areas().map((a) => this._powerId(a)).filter((id) => id && hass.states[id] && !main.includes(id));
     if (!main.length && !rooms.length) return;
     this._histBusy = true;
@@ -1094,6 +1146,11 @@ class HomeDashboardCard extends HTMLElement {
 
   _renderRooms() {
     const hass = this._hass;
+    const cols = this.shadowRoot.querySelector('.cols');
+    if (cols) {
+      cols.classList.toggle('scroll', this._config.scroll_sections !== false);
+      if (this._config.section_height) cols.style.setProperty('--sec-h', this._config.section_height); else cols.style.removeProperty('--sec-h');
+    }
     const areas = this._areas();
     const html = areas.map((a) => {
       const sts = this._areaStates(a.area_id);

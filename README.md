@@ -159,3 +159,10 @@ Mediengeräte erscheinen dort nur während einer Wiedergabe.
 
 Links zu ESPHome, Grohe, LocalThings, Miele, Schlüter, Shelly, Tasmota, X-Sense, Pi-hole und Proxmox übernehmen die Farbe ihrer aktiven Geräte: die häufigste Farbe gewinnt, bei Gleichstand die stärkere
 (rot vor blau, lila, orange, gelb, grün). Ist kein Gerät aktiv (alles aus oder deaktiviert), wird der Link grau; `auto_color: false` am Link schaltet das ab, `auto_color: true` schaltet es für andere Integrationen ein.
+
+## Start-Dashboard: Termine, Netzbezug, Scrollen
+
+- **Termine:** Der Header zeigt die heutigen Termine (ganztägige zuerst, vergangene blass). `calendars: [calendar.x]` wählt Kalender aus (Standard: alle), `calendar_max: 6` begrenzt die Anzahl.
+- **Netzbezug:** Der Haus-Graph zeigt den Netzbezug (positiver Teil von `power.grid`) als lila Fläche.
+- **Scrollen:** Seiten und Räume scrollen getrennt in Bildschirmhöhe (`section_height`, Standard `calc(100vh - 150px)`); `scroll_sections: false` schaltet das ab.
+
