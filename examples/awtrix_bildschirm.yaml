@@ -1,0 +1,16 @@
+# Bild der AWTRIX-Uhren für die awtrix-screen-card (Pixel als Attribut).
+# Präfix je Uhr anpassen; den Sensor in recorder: exclude aufnehmen (große Attribute).
+mqtt:
+  sensor:
+    - name: "AWTRIX TC001 Bildschirm"
+      unique_id: awtrix_tc001_bildschirm
+      default_entity_id: sensor.awtrix_tc001_bildschirm
+      icon: mdi:dots-grid
+      state_topic: homeassistant/awtrix/<id>/state/screen
+      value_template: "{{ value_json.width }}x{{ value_json.height }}"
+      json_attributes_topic: homeassistant/awtrix/<id>/state/screen
+
+recorder:
+  exclude:
+    entity_globs:
+      - sensor.awtrix_*_bildschirm

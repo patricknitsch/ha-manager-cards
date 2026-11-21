@@ -170,3 +170,20 @@ Links zu ESPHome, Grohe, LocalThings, Miele, Schlüter, Shelly, Tasmota, X-Sense
   rechts Haus, Seiten und Räume (`layout: stacked` für die alte Anordnung; Breite über `--side-w`, Höhe über `--hmc-vh`).
 - **Seiten links:** `layout: sidebar_links` stellt links Kopf und Seiten dar, rechts die Status-Symbole als Kopfzeile, darunter Haus und die Räume allein (mehrspaltig, scrollbar).
   Seitenleiste und Statuszeile sind leicht getönt und gerahmt; die Tönung stellt die CSS-Variable `--panel-tint` ein (Standard 7 %).
+
+## AWTRIX Screen Card
+
+Zeigt das aktuelle Bild einer AWTRIX-Uhr als LED-Matrix. Quelle ist ein MQTT-Sensor auf `<prefix>/state/screen`
+([`examples/awtrix_bildschirm.yaml`](examples/awtrix_bildschirm.yaml)); solange die Karte sichtbar ist, fordert sie
+alle `interval` Sekunden über `<prefix>/cmd/screen/get` ein neues Bild an.
+
+```yaml
+type: custom:awtrix-screen-card
+entity: sensor.awtrix_tc001_bildschirm
+request_topic: homeassistant/awtrix/88572119014c/cmd/screen/get
+interval: 2
+name: TC001
+```
+
+In der Startkarte erscheinen die Uhren mit `awtrix: [{ entity, request_topic, name }]` in der Seitenleiste.
+

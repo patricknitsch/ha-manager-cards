@@ -25,10 +25,11 @@
  *   scroll_sections: true                      # Seiten und Räume getrennt scrollbar; section_height: 'calc(100vh - 150px)'
  *   layout: sidebar                            # sidebar (Standard, ab 1100 px: links Uhr/Kopf/Status, rechts Haus/Seiten/Räume)
  *                                              # | sidebar_links (links Kopf + Seiten, rechts Status-Kopfzeile, Haus, Räume) | stacked
+ *   awtrix: [{ entity: sensor.awtrix_tc001_bildschirm, request_topic: …/cmd/screen/get, name: TC001 }]   # Uhren in der Seitenleiste
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.10.1';
+const VERSION = '2.11.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -166,6 +167,7 @@ const STYLE = `
   @media (max-width: 700px) { .cols { grid-template-columns: minmax(0, 0.8fr) minmax(0, 2fr); gap: 10px; } }
 
   .side, .main { display:flex; flex-direction:column; gap: var(--gap); min-width:0; }
+  .aw { display:flex; flex-direction:column; gap: 8px; } .aw[hidden] { display:none; }
   .clock { display:none; }
   /* Seitenleiste (layout: sidebar, Standard): links Uhr, Begrüßung, Wetter, Termine, Status; rechts Haus, Seiten und Räume.
      Schmaler als 1100 px bleibt alles untereinander. */
@@ -456,6 +458,7 @@ class HomeDashboardCard extends HTMLElement {
     this._render();
     if (this._pop) this._updatePopup();
     if (this._camPop) for (const c of this._camPop.els) c.hass = hass;
+    this._renderAwtrix();
     if (!this._calTs) this._fetchCal();
     if (!this._histTs) this._fetchHist();
     if (!this._fcTs) this._fetchForecast();
@@ -586,7 +589,7 @@ class HomeDashboardCard extends HTMLElement {
   _build() {
     this.attachShadow({ mode: 'open' }).innerHTML = `<style>${STYLE}</style>
       <div class="page">
-        <aside class="side"><div id="hdr"></div><div id="stat" class="stat"></div></aside>
+        <aside class="side"><div id="hdr"></div><div id="awtrix" class="aw" hidden></div><div id="stat" class="stat"></div></aside>
         <main class="main">
           <section id="haussec"><h2>Haus</h2><div id="haus" class="card haus click" data-pop="power"></div></section>
           <div class="cols">
@@ -782,6 +785,22 @@ class HomeDashboardCard extends HTMLElement {
       this._calTs = Date.now();
       this._renderHeader();
     } finally { this._calBusy = false; }
+  }
+
+  /** AWTRIX-Uhren in der Seitenleiste (awtrix: [{ entity, request_topic, name }]) */
+  _renderAwtrix() {
+    const box = this.shadowRoot.getElementById('awtrix');
+    const list = this._config.awtrix || [];
+    if (!box) return;
+    box.hidden = !list.length || !customElements.get('awtrix-screen-card');
+    if (box.hidden) return;
+    const key = JSON.stringify(list);
+    if (this._awKey !== key) {
+      this._awKey = key;
+      box.innerHTML = '';
+      this._aw = list.map((c) => { const el = document.createElement('awtrix-screen-card'); el.setConfig({ bare: true, ...c }); box.appendChild(el); return el; });
+    }
+    for (const el of this._aw || []) el.hass = this._hass;
   }
 
   _renderStatus() {
