@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.13.0 – 16 Karten: awtrix-screen-card, esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, synology-manager-card, tasmota-manager-card, updater-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.13.1 – 16 Karten: awtrix-screen-card, esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, synology-manager-card, tasmota-manager-card, updater-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== 00-activity.js ===== */
 {
@@ -10590,6 +10590,7 @@ if (!customElements.get('home-summary-card')) {
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  *   admin_only: [pi_hole, proxmoxve, xsense]   # Integrationen nur für Administratoren (Links, Räume, Zähler)
  *   links: [{ …, admin: true }]                # einzelnen Link nur Administratoren zeigen
+ *   links: [{ …, unit: Panel, badge: count }]  # eigene Einheit statt „Gerät“; Badge = Anzahl der Geräte statt der aktiven
  *   links: [{ …, auto_color: false }]          # Geräte-Integrationen färben sich nach ihren aktiven Geräten (häufigste Farbe); true schaltet es für weitere ein
  *   popup_opacity: 50                         # Deckkraft der Popups in % (100 = deckend), popup_blur: 10 (px), popup_dim: 20 (% Abdunklung)
  *   color_strength: 24                         # Farbstärke der Gerätehervorhebung in % (Rahmen = doppelt + 20)
@@ -10602,7 +10603,7 @@ if (!customElements.get('home-summary-card')) {
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.12.0';
+const VERSION = '2.12.1';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -11633,6 +11634,17 @@ class HomeDashboardCard extends HTMLElement {
     return (this._lsCache[integration] = { n: ids.length, off, upd, act, color });
   }
 
+  /** eingeschaltete Apps aller AWTRIX-Studio-Panels (Indikatoren zählen nicht) */
+  _awtrixApps() {
+    const hass = this._hass; let n = 0; let any = false;
+    for (const e of Object.values(hass.entities || {})) {
+      if (e.platform !== 'awtrix_studio' || !e.entity_id.startsWith('switch.') || /indicator/.test(e.entity_id)) continue;
+      const st = hass.states[e.entity_id]; if (!st) continue;
+      any = true; if (st.state === 'on') n++;
+    }
+    return any ? n : null;
+  }
+
   _renderLinks() {
     const hass = this._hass;
     const html = (this._config.links || []).map((l, i) => {
@@ -11650,7 +11662,9 @@ class HomeDashboardCard extends HTMLElement {
           if (s.reboot) info.push(`<span class="warn">${s.reboot} Neustart</span>`);
           if (s.off) info.push(`<span class="err">${s.off} nicht erreichbar</span>`);
         } else {
-          info.push(`${s.n} Gerät${s.n === 1 ? '' : 'e'}`);
+          // unit: eigene Bezeichnung statt „Gerät“ (z. B. Panel für AWTRIX), Mehrzahl mit -s
+          info.push(l.unit ? `${s.n} ${esc(l.unit)}${s.n === 1 ? '' : 's'}` : `${s.n} Gerät${s.n === 1 ? '' : 'e'}`);
+          if (l.integration === 'awtrix_studio') { const on = this._awtrixApps(); if (on != null) info.push(`${on} App${on === 1 ? '' : 's'} an`); }
           if (s.n) info.push(...(s.off ? [`<span class="ok">${s.n - s.off} online</span>`, `<span class="err">${s.off} offline</span>`] : ['<span class="ok">alle online</span>']));
           if (s.upd) info.push(`<span class="warn">${s.upd} Update${s.upd === 1 ? '' : 's'}</span>`);
         }
@@ -11668,7 +11682,8 @@ class HomeDashboardCard extends HTMLElement {
       let badge = '';
       if (l.integration) {
         const ls = this._linkStats(l.integration); const a = ls.act;
-        if (a) badge = ls.unit ? `<span class="bdg ${ls.color === window.__hmcColors?.pw ? 'err' : 'warn'}" title="${a} ${ls.unit}${a === 1 ? '' : 'e'} mit Updates oder Neustartbedarf">${a}</span>` : `<span class="bdg" title="${a} aktiv">${a}</span>`;
+        if (l.badge === 'count' && ls.n) badge = `<span class="bdg" title="${ls.n} ${esc(l.unit || 'Gerät')}${ls.n === 1 ? '' : (l.unit ? 's' : 'e')}">${ls.n}</span>`;
+        else if (a) badge = ls.unit ? `<span class="bdg ${ls.color === window.__hmcColors?.pw ? 'err' : 'warn'}" title="${a} ${ls.unit}${a === 1 ? '' : 'e'} mit Updates oder Neustartbedarf">${a}</span>` : `<span class="bdg" title="${a} aktiv">${a}</span>`;
       }
       if (l.popup === 'integrations' && this._entries) {
         const ms = this._monDomains().map((d) => this._monitor(d));
@@ -12264,4 +12279,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.13.0 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.13.1 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');

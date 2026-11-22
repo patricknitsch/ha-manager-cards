@@ -40,7 +40,7 @@ Updates kommen über den Marketplace, sobald ein neues Release angelegt ist.
 `dist/ha-manager-cards.js` nach `/config/www/ha-manager-cards/` kopieren und als Ressource (Typ *JavaScript-Modul*) eintragen:
 
 ```
-/local/ha-manager-cards/ha-manager-cards.js?v=1.13.0
+/local/ha-manager-cards/ha-manager-cards.js?v=1.13.1
 ```
 
 Bei jedem Update die Versionsnummer in der URL erhöhen, sonst lädt der Browser die alte Datei aus dem Cache.
@@ -106,6 +106,8 @@ Ist kein Gerät aktiv (alles aus oder deaktiviert), wird der Link grau.
 Der Link zum Ultimate Updater zählt die Systeme mit Updates oder Neustartbedarf und nimmt die Farbe des dringendsten Zustands an
 (rot Sicherheitsupdates, orange Updates, lila Neustart, grün alles aktuell). `auto_color: false` am Link schaltet das ab,
 `auto_color: true` schaltet es für weitere Integrationen ein.
+`unit: Panel` ersetzt „Gerät“ in der Beschreibung, `badge: count` zeigt im Badge die Anzahl der Geräte statt der aktiven.
+Der AWTRIX-Studio-Link (`integration: awtrix_studio`, `path: /awtrix-studio`) zeigt zusätzlich, wie viele Apps eingeschaltet sind.
 
 ### Popups
 
