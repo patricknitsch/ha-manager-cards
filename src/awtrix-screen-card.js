@@ -13,8 +13,16 @@
  *   gap: 0.18              # Abstand zwischen den LEDs (Anteil der Pixelgröße)
  *   round: true            # runde LEDs
  *   bare: false            # ohne Kartenrahmen (für die Einbettung)
+ *
+ * Fehlerfall: Ist MQTT getrennt (Sensor „unavailable“) oder schlägt mqtt.publish fehl, stoppt der Abruf
+ * für alle Uhren auf der Seite und die Karte zeigt eine Meldung. Neuer Versuch nach 15 s, 30 s, 60 s …
+ * (höchstens 5 min) oder sofort über „Erneut versuchen“. Antwortet die Uhr nicht, wird nur noch alle 30 s abgefragt.
  */
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
+
+// Gemeinsamer Zustand aller AWTRIX-Karten der Seite: ein MQTT-Fehler bremst alle zugleich
+const AWX = (window.__hmcAwtrix ||= { downUntil: 0, fails: 0, err: '' });
+const STALE_POLL = 30000;
 
 class AwtrixScreenCard extends HTMLElement {
   setConfig(config) {
@@ -28,7 +36,12 @@ class AwtrixScreenCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     const st = hass.states[this._config.entity];
-    if (st !== this._st) { this._st = st; this._draw(); }
+    if (st !== this._st) {
+      // Rückkehr nach „unavailable“: MQTT ist wieder verbunden, Sperre aufheben
+      if (this._st?.state === 'unavailable' && st && st.state !== 'unavailable') { AWX.downUntil = 0; AWX.fails = 0; AWX.err = ''; }
+      this._st = st; this._draw();
+    }
+    this._status();
   }
 
   connectedCallback() {
@@ -49,14 +62,56 @@ class AwtrixScreenCard extends HTMLElement {
   _schedule() {
     const on = this._visible && document.visibilityState === 'visible' && this._config.request_topic;
     if (on && !this._timer) {
+      this._first = Date.now(); this._sent = 0;
       this._request();
       this._timer = setInterval(() => this._request(), Math.max(1, Number(this._config.interval) || 2) * 1000);
     } else if (!on && this._timer) { clearInterval(this._timer); this._timer = null; }
   }
 
+  /** Bild älter als 5 Abrufe (mind. 10 s) trotz erfolgreicher Anfrage: Uhr antwortet nicht */
+  _stale() {
+    const t = Date.parse(this._st?.last_updated || '');
+    const lim = Math.max(10000, 5 * Math.max(1, Number(this._config.interval) || 2) * 1000);
+    return !!this._sent && Date.now() - this._sent < 120000 && (!t || Date.now() - t > lim) && Date.now() - this._first > lim;
+  }
+
   _request() {
-    if (!this._hass || !this._config.request_topic) return;
-    this._hass.callService('mqtt', 'publish', { topic: this._config.request_topic, payload: '' }).catch(() => { /* ohne Recht oder MQTT: letztes Bild bleibt */ });
+    if (!this._hass || !this._config.request_topic || this._busy) return;
+    if (!this._st || this._st.state === 'unavailable') { this._status(); return; }   // MQTT getrennt: nichts senden
+    const now = Date.now();
+    if (now < AWX.downUntil) { this._status(); return; }
+    if (this._stale() && now - this._sent < STALE_POLL) { this._status(); return; }
+    this._busy = true;
+    this._hass.callService('mqtt', 'publish', { topic: this._config.request_topic, payload: '' })
+      .then(() => { this._sent = Date.now(); AWX.fails = 0; AWX.err = ''; AWX.downUntil = 0; })
+      .catch((e) => {
+        AWX.fails = Math.min(AWX.fails + 1, 6);
+        AWX.downUntil = Date.now() + Math.min(300, 15 * 2 ** (AWX.fails - 1)) * 1000;
+        AWX.err = String(e?.message || e?.error?.message || e || 'Fehler');
+      })
+      .finally(() => { this._busy = false; this._status(); });
+  }
+
+  _retry() { AWX.downUntil = 0; AWX.fails = 0; AWX.err = ''; this._sent = 0; this._first = 0; this._status(); this._request(); }
+
+  /** Meldung über dem Bild: MQTT getrennt, Abruf pausiert oder Uhr antwortet nicht */
+  _status() {
+    const box = this.shadowRoot?.querySelector('.msg');
+    if (!box) return;
+    let txt = ''; let btn = false;
+    if (this._config.request_topic && this._st?.state === 'unavailable') txt = 'MQTT nicht verbunden – Abruf pausiert';
+    else if (this._config.request_topic && Date.now() < AWX.downUntil) {
+      const s = Math.ceil((AWX.downUntil - Date.now()) / 1000);
+      txt = `MQTT-Fehler – Abruf pausiert, neuer Versuch in ${s} s`; btn = true;
+    } else if (this._config.request_topic && this._stale()) txt = 'Uhr antwortet nicht – Abfrage nur alle 30 s';
+    const key = txt.replace(/\d+ s$/, '') + btn;
+    if (txt) box.querySelector('.t').textContent = txt;
+    box.title = txt && AWX.err ? AWX.err : '';
+    if (key === this._msgKey) return;
+    this._msgKey = key;
+    box.hidden = !txt;
+    box.querySelector('button').hidden = !btn;
+    this.shadowRoot.querySelector('.scr').classList.toggle('dim', !!txt);
   }
 
   _build() {
@@ -69,11 +124,24 @@ class AwtrixScreenCard extends HTMLElement {
       .scr { background:#050505; border-radius: 8px; padding: 6px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
       canvas { display:block; width:100%; image-rendering: pixelated; }
       .off { font-size:12px; color: var(--secondary-text-color); padding: 10px; text-align:center; }
+      .scr { position: relative; }
+      .scr.dim canvas { opacity: .35; filter: grayscale(.6); }
+      .msg { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap;
+             font-size:12px; color:#fff; text-align:center; padding: 4px 8px; }
+      .msg[hidden] { display:none; }
+      .msg .t { background: rgba(183,28,28,.85); border-radius: 6px; padding: 3px 8px; }
+      .msg button { font: inherit; font-size: 11px; color: #fff; background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.35);
+             border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+      .msg button[hidden] { display:none; }
     </style>
     <div class="wrap">${this._config.name ? `<div class="n"><span>${this._config.name}</span><span class="age"></span></div>` : ''}
-      <div class="scr"><canvas></canvas><div class="off" hidden>kein Bild</div></div></div>`;
+      <div class="scr"><canvas></canvas><div class="off" hidden>kein Bild</div>
+        <div class="msg" hidden><span class="t"></span><button type="button">Erneut versuchen</button></div></div></div>`;
     this._cv = this.shadowRoot.querySelector('canvas');
+    this.shadowRoot.querySelector('.msg button').addEventListener('click', (e) => { e.stopPropagation(); this._retry(); });
+    this._msgKey = null;
     this._draw();
+    this._status();
   }
 
   _draw() {

@@ -38,7 +38,7 @@ Updates kommen über den Marketplace, sobald ein neues Release angelegt ist.
 `dist/ha-manager-cards.js` nach `/config/www/ha-manager-cards/` kopieren und als Ressource (Typ *JavaScript-Modul*) eintragen:
 
 ```
-/local/ha-manager-cards/ha-manager-cards.js?v=1.12.0
+/local/ha-manager-cards/ha-manager-cards.js?v=1.12.1
 ```
 
 Bei jedem Update die Versionsnummer in der URL erhöhen, sonst lädt der Browser die alte Datei aus dem Cache.
@@ -216,6 +216,10 @@ Zeigt das aktuelle Bild einer AWTRIX-Uhr (z. B. Ulanzi TC001 32×8 oder 64×8) a
 Quelle ist ein MQTT-Sensor auf `<prefix>/state/screen` ([`examples/awtrix_bildschirm.yaml`](examples/awtrix_bildschirm.yaml)).
 Solange die Karte sichtbar ist, fordert sie alle `interval` Sekunden über `<prefix>/cmd/screen/get` ein neues Bild an;
 im Hintergrund oder bei verdecktem Tab läuft kein Abruf.
+
+Ist MQTT getrennt oder schlägt der Abruf fehl, stoppt er für alle Uhren auf der Seite und die Karte zeigt eine Meldung über dem
+abgedunkelten Bild. Neue Versuche folgen nach 15 s, 30 s, 60 s … (höchstens 5 min), sofort über „Erneut versuchen“ oder automatisch,
+sobald der Sensor wieder verfügbar ist. Antwortet die Uhr selbst nicht, fragt die Karte nur noch alle 30 s.
 
 ```yaml
 type: custom:awtrix-screen-card
