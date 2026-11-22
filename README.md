@@ -20,6 +20,8 @@ Alle Karten stecken in **einer** Datei (`dist/ha-manager-cards.js`). In Home Ass
 | Schlüter Manager | `custom:schlueter-manager-card` | `ojmicroline_thermostat` |
 | Pi-hole Manager | `custom:pihole-manager-card` | `pi_hole` |
 | LocalThings Manager | `custom:localthings-manager-card` | `localthings` |
+| Synology Manager | `custom:synology-manager-card` | `synology_dsm` (+ `wake_on_lan`) |
+| Ultimate Updater | `custom:updater-manager-card` | `ultimate_updater` ([Proxmox Ultimate Updater](https://github.com/BassT23/Proxmox)) |
 | SENEC Manager | `custom:senec-manager-card` | `senec` ([ha-senec-v3](https://github.com/marq24/ha-senec-v3)) |
 | AWTRIX Screen | `custom:awtrix-screen-card` | – (MQTT-Sensor) |
 
@@ -38,7 +40,7 @@ Updates kommen über den Marketplace, sobald ein neues Release angelegt ist.
 `dist/ha-manager-cards.js` nach `/config/www/ha-manager-cards/` kopieren und als Ressource (Typ *JavaScript-Modul*) eintragen:
 
 ```
-/local/ha-manager-cards/ha-manager-cards.js?v=1.12.1
+/local/ha-manager-cards/ha-manager-cards.js?v=1.13.0
 ```
 
 Bei jedem Update die Versionsnummer in der URL erhöhen, sonst lädt der Browser die alte Datei aus dem Cache.
@@ -98,9 +100,11 @@ Seiten und Räume scrollen getrennt in Bildschirmhöhe (`section_height`, Standa
 ### Links und Badges
 
 Links zu Integrationen tragen am Icon die Anzahl der farbig hervorgehobenen (aktiven) Geräte; der Frigate-Link zeigt die Anzahl der Kameras.
-Links zu ESPHome, Grohe, LocalThings, Miele, Schlüter, Shelly, Tasmota, X-Sense, Pi-hole und Proxmox übernehmen die Farbe ihrer
+Links zu ESPHome, Grohe, LocalThings, Miele, Schlüter, Shelly, Tasmota, X-Sense, Pi-hole, Proxmox und Synology übernehmen die Farbe ihrer
 aktiven Geräte: die häufigste Farbe gewinnt, bei Gleichstand die stärkere (rot vor blau, lila, orange, gelb, grün).
-Ist kein Gerät aktiv (alles aus oder deaktiviert), wird der Link grau. `auto_color: false` am Link schaltet das ab,
+Ist kein Gerät aktiv (alles aus oder deaktiviert), wird der Link grau.
+Der Link zum Ultimate Updater zählt die Systeme mit Updates oder Neustartbedarf und nimmt die Farbe des dringendsten Zustands an
+(rot Sicherheitsupdates, orange Updates, lila Neustart, grün alles aktuell). `auto_color: false` am Link schaltet das ab,
 `auto_color: true` schaltet es für weitere Integrationen ein.
 
 ### Popups
@@ -156,12 +160,12 @@ Raum-Popups, Raumkachel-Symbole und Link-Farben:
 
 | Farbe | Bedeutung |
 |---|---|
-| rot | Verbrauch ab 10 W, Heizen, laufendes Haushaltsgerät, Rauchalarm |
+| rot | Verbrauch ab 10 W, Heizen, laufendes Haushaltsgerät, Rauchalarm; beim Ultimate Updater: Sicherheitsupdates |
 | blau | Wassergerät in Betrieb (Ventil offen, Durchfluss, Pumpe) |
-| lila | laufender Server (Proxmox) |
-| orange | Pi-hole mit aktivem Blockieren, erreichbare X-Sense-Geräte |
+| lila | laufender Server (Proxmox, Synology-NAS); beim Ultimate Updater: Neustart nötig |
+| orange | Pi-hole mit aktivem Blockieren, erreichbare X-Sense-Geräte; beim Ultimate Updater: Updates verfügbar |
 | gelb | Licht an |
-| grün | nur eingeschaltet |
+| grün | nur eingeschaltet; beim Ultimate Updater: aktuell |
 
 Gilt für Shelly, Tasmota, ESPHome, Schlüter, Grohe, Miele, LocalThings, X-Sense, Proxmox, Pi-hole und die Raum-Popups.
 Die Farbstärke stellt `color_strength` in der Startkarte ein (Standard 24 %).
@@ -208,6 +212,35 @@ sequence:
   - variables: { ergebnis: "{{ {'text': antwort.stdout, 'code': antwort.returncode} }}" }
   - stop: Protokoll geladen
     response_variable: ergebnis
+```
+
+## Synology Manager Card
+
+Je NAS eine Kachel: CPU, RAM, Temperatur, Volumes mit Belegung, Laufwerke mit Status und Temperatur, Netzwerk,
+DSM-Update und Sicherheitsberater. Tasten für DSM, **Wecken**, Neustart und Herunterfahren (mit Rückfrage).
+
+Wecken nutzt die Integration **Wake on LAN** (`wake_on_lan`, über die Oberfläche einrichten, MAC des NAS eintragen).
+Die Karte findet die Taste über die MAC-Adresse selbst; sonst `wol: { <NAS-Name>: button.x }` angeben.
+Im DSM muss unter *Hardware & Energie* „WOL auf LAN aktivieren“ eingeschaltet sein. Liegt das NAS in einem anderen VLAN
+als Home Assistant, braucht die Integration die Broadcast-Adresse dieses Netzes.
+
+```yaml
+type: custom:synology-manager-card
+warn: 80   # Auslastung ab % gelb
+crit: 95   # ab % rot
+```
+
+## Ultimate Updater Card
+
+Für den [Proxmox Ultimate Updater](https://github.com/BassT23/Proxmox) mit seiner Home-Assistant-Integration.
+Je Updater-Instanz (Proxmox-Host) ein Kopfbereich mit Stand, laufendem Job oder Sammel-Update (mit Fortschritt),
+letztem Job, Bericht und den Tasten *Alle prüfen*, *Sicherheitsupdates installieren*, *Alle aktualisieren*, *Job abbrechen*.
+Darunter je System (Host, LXC, VM) eine Kachel mit Sicherheits- und weiteren Updates, Prüfstatus, letzter Prüfung,
+Neustartbedarf und den Tasten *Prüfen*, *Aktualisieren* und *Neustart*. Filter nach Updates, Sicherheit, Neustart, nicht erreichbar.
+
+```yaml
+type: custom:updater-manager-card
+confirm: true   # Rückfrage vor Aktualisieren und Neustart
 ```
 
 ## AWTRIX Screen Card

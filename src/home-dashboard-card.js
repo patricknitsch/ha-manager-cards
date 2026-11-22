@@ -29,7 +29,7 @@
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.11.0';
+const VERSION = '2.12.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -60,7 +60,7 @@ const APPS = [
 ];
 const PLUG = /messdose|steckdose|zwischenstecker|plug/i;
 // Integrationslinks, deren Farbe sich aus den aktiven Geräten ergibt (andere mit auto_color: true)
-const AUTO_LINKS = ['esphome', 'grohe_smarthome', 'localthings', 'miele_lan', 'ojmicroline_thermostat', 'shelly', 'tasmota', 'xsense', 'pi_hole', 'proxmoxve'];
+const AUTO_LINKS = ['esphome', 'grohe_smarthome', 'localthings', 'miele_lan', 'ojmicroline_thermostat', 'shelly', 'tasmota', 'xsense', 'pi_hole', 'proxmoxve', 'synology_dsm', 'ultimate_updater'];
 const APPS_EXCL = /ha-mcp|mcp server/i;   // Dienste, keine Geräte
 const DWD_COLOR = ['var(--disabled-color, #9e9e9e)', '#ffeb3b', '#ff9800', '#f44336', '#9c27b0'];
 const DWD_TEXT = ['keine Warnung', 'Wetterwarnung', 'Markantes Wetter', 'Unwetterwarnung', 'Extremes Unwetter'];
@@ -1019,7 +1019,19 @@ class HomeDashboardCard extends HTMLElement {
         || (dom === 'media_player' && st.state === 'playing') || (dom === 'vacuum' && st.state === 'cleaning')
         || (dom === 'binary_sensor' && st.attributes.device_class === 'running' && st.state === 'on')) act++;
     }
-    const ids = Object.keys(devs).filter((id) => hass.devices[id] && !hass.devices[id].disabled_by);
+    let ids = Object.keys(devs).filter((id) => hass.devices[id] && !hass.devices[id].disabled_by);
+    // Volumes/Laufwerke eines NAS sind keine eigenen Geräte
+    if (window.__hmcActRaw) ids = ids.filter((id) => !window.__hmcActRaw(hass, id).sub);
+    // Ultimate Updater: verwaltete Systeme zählen; Badge = Systeme mit Updates oder Neustartbedarf, Farbe = dringendster Zustand
+    if (window.__hmcUpd && integration === 'ultimate_updater') {
+      const us = ids.map((id) => window.__hmcUpd(hass, id)).filter((u) => u.sys);
+      const order = ['sec', 'upd', 'reboot', 'ok'];
+      const worst = order.find((k) => us.some((u) => u.s === k));
+      const col = { sec: 'pw', upd: 'ph', reboot: 'srv', ok: 'sw' }[worst];
+      return (this._lsCache[integration] = { n: us.length, off: us.filter((u) => u.s === 'off').length, upd: us.filter((u) => u.s === 'sec' || u.s === 'upd').length,
+        act: us.filter((u) => ['sec', 'upd', 'reboot'].includes(u.s)).length, color: col ? window.__hmcColors[col] : null,
+        reboot: us.filter((u) => u.reboot).length, unit: 'System' });
+    }
     const off = ids.filter((id) => devs[id].every((s) => s.state === 'unavailable')).length;
     // aktive Geräte: mindestens eine Entität eingeschaltet bzw. in Betrieb
     const isAct = (st) => {
@@ -1059,9 +1071,16 @@ class HomeDashboardCard extends HTMLElement {
       const info = [];
       if (l.integration) {
         const s = this._linkStats(l.integration);
-        info.push(`${s.n} Gerät${s.n === 1 ? '' : 'e'}`);
-        if (s.n) info.push(...(s.off ? [`<span class="ok">${s.n - s.off} online</span>`, `<span class="err">${s.off} offline</span>`] : ['<span class="ok">alle online</span>']));
-        if (s.upd) info.push(`<span class="warn">${s.upd} Update${s.upd === 1 ? '' : 's'}</span>`);
+        if (s.unit) {
+          info.push(`${s.n} ${s.unit}${s.n === 1 ? '' : 'e'}`);
+          info.push(s.upd ? `<span class="warn">${s.upd} mit Updates</span>` : '<span class="ok">alle aktuell</span>');
+          if (s.reboot) info.push(`<span class="warn">${s.reboot} Neustart</span>`);
+          if (s.off) info.push(`<span class="err">${s.off} nicht erreichbar</span>`);
+        } else {
+          info.push(`${s.n} Gerät${s.n === 1 ? '' : 'e'}`);
+          if (s.n) info.push(...(s.off ? [`<span class="ok">${s.n - s.off} online</span>`, `<span class="err">${s.off} offline</span>`] : ['<span class="ok">alle online</span>']));
+          if (s.upd) info.push(`<span class="warn">${s.upd} Update${s.upd === 1 ? '' : 's'}</span>`);
+        }
       }
       if (l.entity && hass.states[l.entity]) {
         const st = hass.states[l.entity];
@@ -1074,7 +1093,10 @@ class HomeDashboardCard extends HTMLElement {
         else info.push(s.warn ? `<span class="warn">${s.warn} Warnung${s.warn === 1 ? '' : 'en'}</span>` : '<span class="ok">keine Fehler</span>');
       }
       let badge = '';
-      if (l.integration) { const a = this._linkStats(l.integration).act; if (a) badge = `<span class="bdg" title="${a} aktiv">${a}</span>`; }
+      if (l.integration) {
+        const ls = this._linkStats(l.integration); const a = ls.act;
+        if (a) badge = ls.unit ? `<span class="bdg ${ls.color === window.__hmcColors?.pw ? 'err' : 'warn'}" title="${a} ${ls.unit}${a === 1 ? '' : 'e'} mit Updates oder Neustartbedarf">${a}</span>` : `<span class="bdg" title="${a} aktiv">${a}</span>`;
+      }
       if (l.popup === 'integrations' && this._entries) {
         const ms = this._monDomains().map((d) => this._monitor(d));
         const e = ms.filter((m) => m.lvl === 2).length; const w = ms.filter((m) => m.lvl === 1).length;
@@ -1147,7 +1169,8 @@ class HomeDashboardCard extends HTMLElement {
       const name = `${d.name_by_user || d.name || ''} ${d.model || ''}`;
       const r = window.__hmcActRaw ? window.__hmcActRaw(hass, d.id) : { a: '', on: false };
       // Proxmox-Geräte sind immer Server, Pi-hole-Geräte immer Pi-hole – unabhängig vom Namen (z. B. Container „pihole-backup“)
-      const g = APPS_EXCL.test(name) ? null : r.p ? APPS.find((x) => x.k === (r.p === 'proxmoxve' ? 'server' : 'pihole')) : APPS.find((x) => x.re.test(name));
+      if (r.meta || r.sub) continue; // Update-Verwaltung bzw. Volume/Laufwerk eines NAS
+      const g = APPS_EXCL.test(name) ? null : r.p ? APPS.find((x) => x.k === (r.p === 'pi_hole' ? 'pihole' : 'server')) : APPS.find((x) => x.re.test(name));
       if (!g) continue;
       if (!r.on) continue; // ausgeschaltet oder nicht erreichbar: kein Symbol
       const x = (groups[g.k] ||= { g, plug: 0, dev: 0, act: 0, kinds: new Set() });

@@ -8,20 +8,53 @@
   const PSW = /power.?switch/i; // Ein/Aus eines Thermostats ist eine Einstellung, bei Schaltdosen der Ausgang
   const SETTING = /lock|sperre|kindersicherung|led|anzeige|display|detect|motion|record|snapshot|modus|mode|sprinkler|zugriff|access|privacy|eco|auto|alarm|notification|benachricht/i;
   const U = { W: 1, kW: 1000, MW: 1e6 };
-  const SRV = ['proxmoxve', 'pi_hole'];
+  const SRV = ['proxmoxve', 'pi_hole', 'synology_dsm'];
+  const META = ['ultimate_updater'];   // Verwaltungsgeräte ohne eigene Aktivität (Update-Status), zählen nicht als Server
   const WATER = /pumpe|pump|bewässer|bewaesser|sprinkler|zisterne|ventil|valve|wasser(?!.*speicher)/i;
   let idxFor = null; let idx = {}; let resFor = null; let res = {};
   window.__hmcColorEntity = window.__hmcColorEntity || 'input_boolean.dashboard_farben';
+  const ensureIdx = (hass) => {
+    if (idxFor === hass.entities) return;
+    idxFor = hass.entities; idx = {};
+    for (const e of Object.values(hass.entities)) if (e.device_id && !e.hidden && !e.disabled_by) (idx[e.device_id] ||= []).push(e);
+  };
+  const UPD_ACT = { sec: 'pw', upd: 'ph', reboot: 'srv', ok: 'sw' };
+  const num = (st) => { const v = parseFloat(st?.state); return Number.isNaN(v) ? 0 : v; };
+  /** Update-Status eines vom Ultimate Updater verwalteten Systems:
+   * { sys: System (kein Updater-Gerät), s: 'sec'|'upd'|'reboot'|'ok'|'off', sec, other, reboot, reach, ents } */
+  window.__hmcUpd = (hass, devId) => {
+    ensureIdx(hass);
+    const r = { sys: false, s: '', sec: 0, other: 0, reboot: false, reach: null, e: {} };
+    for (const e of idx[devId] || []) {
+      const st = hass.states[e.entity_id]; if (!st) continue;
+      const k = `${e.translation_key || ''}|${e.entity_id}`.toLowerCase(); const dom = e.entity_id.split('.')[0];
+      if (dom === 'update') { r.sys = true; r.e.update = e.entity_id; }
+      else if (dom === 'binary_sensor' && st.attributes.device_class === 'connectivity') { r.reach = st.state === 'on'; r.e.reach = e.entity_id; }
+      else if (dom === 'binary_sensor' && /reboot|neustart/.test(k)) { r.reboot = st.state === 'on'; r.e.reboot = e.entity_id; }
+      else if (dom === 'sensor' && /security|sicherheit/.test(k)) { r.sec = num(st); r.e.sec = e.entity_id; }
+      else if (dom === 'sensor' && /other|weitere|normal/.test(k)) { r.other = num(st); r.e.other = e.entity_id; }
+      else if (dom === 'sensor' && /check_status|prufstatus|pruefstatus/.test(k)) r.e.check = e.entity_id;
+      else if (dom === 'sensor' && /last_check|letzte_pruf/.test(k)) r.e.last = e.entity_id;
+      else if (dom === 'sensor' && /last_job|letzter_job/.test(k)) r.e.job = e.entity_id;
+      else if (dom === 'button' && /check|prufen/.test(k)) r.e.check_btn = e.entity_id;
+      else if (dom === 'button' && /reboot|restart|neustart/.test(k)) r.e.reboot_btn = e.entity_id;
+    }
+    r.s = !r.sys ? '' : r.reach === false ? 'off' : r.sec > 0 ? 'sec' : r.other > 0 ? 'upd' : r.reboot ? 'reboot' : 'ok';
+    return r;
+  };
   /** { a: 'pw'|'li'|'sw'|'srv'|'', cap: Gerät kann aktiv sein, on: eingeschaltet bzw. betriebsbereit } */
   window.__hmcActRaw = (hass, devId) => {
     if (!hass || !devId || !hass.entities) return { a: '', cap: false, on: false };
-    if (idxFor !== hass.entities) {
-      idxFor = hass.entities; idx = {};
-      for (const e of Object.values(hass.entities)) if (e.device_id && !e.hidden && !e.disabled_by) (idx[e.device_id] ||= []).push(e);
-    }
+    ensureIdx(hass);
     if (resFor !== hass.states) { resFor = hass.states; res = {}; }
     if (res[devId]) return res[devId];
     const dv = hass.devices?.[devId]; const names = `${dv?.name_by_user || ''} ${dv?.name || ''}`;
+    const ents = idx[devId] || [];
+    if (ents.length && ents.every((e) => META.includes(e.platform))) {
+      // Ultimate Updater: Farbe nach Update-Status (rot Sicherheitsupdates, orange Updates, lila Neustart nötig, grün aktuell)
+      const u = window.__hmcUpd(hass, devId);
+      return (res[devId] = { a: UPD_ACT[u.s] || '', cap: u.sys, on: u.sys && u.s !== 'off', p: ents[0].platform, meta: true, u });
+    }
     let watt = 0; let run = false; let light = false; let sw = false; let cap = false; let srv = null; let online = false; let on2 = false; let water = false; let clim = false; let psw = false; let xs = false; let pwr = null; let plat = null;
     for (const e of idx[devId] || []) {
       const st = hass.states[e.entity_id];
@@ -30,7 +63,7 @@
       if (st.state !== 'unavailable') online = true;
       if (e.platform === 'xsense') xs = true;
       if (SRV.includes(e.platform)) {
-        srv ||= e.platform; if (e.platform === 'proxmoxve' || !plat) plat = e.platform;
+        srv ||= e.platform; if (e.platform !== 'pi_hole' || !plat) plat = e.platform;
         if (e.platform === 'pi_hole' && dom === 'switch' && !e.entity_category) srv = on ? 'on' : srv === 'on' ? 'on' : 'pi_hole';
         if (e.platform === 'proxmoxve' && dom === 'binary_sensor' && ['running', 'connectivity', 'power'].includes(a.device_class)) srv = on ? 'on' : srv === 'on' ? 'on' : 'proxmoxve';
         continue;
@@ -48,7 +81,11 @@
       if (dom === 'climate') { clim = true; cap = true; if (st.state !== 'off' && st.state !== 'unavailable') on2 = true; if (['heating', 'preheating'].includes(a.hvac_action)) run = true; } else if (dom === 'light') { cap = true; if (on) light = true; } else if (['switch', 'fan'].includes(dom) && !SETTING.test(`${a.friendly_name || ''} ${e.entity_id}`)) { cap = true; if (PSW.test(`${a.friendly_name || ''} ${e.entity_id}`)) { if (on) psw = true; } else if (on) sw = true; } else if (dom === 'binary_sensor' && a.device_class === 'running') { cap = true; if (on) run = true; } else if (dom === 'sensor' && a.device_class === 'enum' && /^(running|in_use|programmed|active|main_wash|drying|rinse|spin)$/i.test(st.state)) { cap = true; run = true; }
     }
     // Server/Pi-hole: aktiv = läuft (Proxmox) bzw. Blockieren an (Pi-hole); ohne Status-Entität reicht „erreichbar“
-    if (srv) { const up = srv === 'on' || (srv === 'proxmoxve' && online && !(idx[devId] || []).some((e) => e.entity_id.startsWith('binary_sensor.'))); return (res[devId] = { a: up ? (plat === 'proxmoxve' ? 'srv' : 'ph') : '', cap: true, on: up, p: plat }); }
+    // Synology: läuft = erreichbar; Volumes und Laufwerke (via_device) sind Teile des NAS, kein eigener Server
+    if (srv) {
+      const up = srv === 'on' || (srv === 'proxmoxve' && online && !(idx[devId] || []).some((e) => e.entity_id.startsWith('binary_sensor.'))) || (srv === 'synology_dsm' && online);
+      return (res[devId] = { a: up ? (plat === 'pi_hole' ? 'ph' : 'srv') : '', cap: true, on: up, p: plat, sub: plat === 'synology_dsm' && !!dv?.via_device_id });
+    }
     if (psw && !clim) sw = true; // „Power Switch“ ohne Thermostat = Ausgang einer Schaltdose
     const act = run || watt >= 10 ? 'pw' : xs && online ? 'xs' : water ? 'wa' : light ? 'li' : sw ? (WATER.test(names) ? 'wa' : 'sw') : '';
     return (res[devId] = { a: act, cap, on: !!act || (pwr !== null ? pwr : on2 || watt >= 1) });

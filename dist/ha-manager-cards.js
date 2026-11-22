@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.12.1 – 14 Karten: awtrix-screen-card, esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, tasmota-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.13.0 – 16 Karten: awtrix-screen-card, esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, synology-manager-card, tasmota-manager-card, updater-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== 00-activity.js ===== */
 {
@@ -12,20 +12,53 @@
   const PSW = /power.?switch/i; // Ein/Aus eines Thermostats ist eine Einstellung, bei Schaltdosen der Ausgang
   const SETTING = /lock|sperre|kindersicherung|led|anzeige|display|detect|motion|record|snapshot|modus|mode|sprinkler|zugriff|access|privacy|eco|auto|alarm|notification|benachricht/i;
   const U = { W: 1, kW: 1000, MW: 1e6 };
-  const SRV = ['proxmoxve', 'pi_hole'];
+  const SRV = ['proxmoxve', 'pi_hole', 'synology_dsm'];
+  const META = ['ultimate_updater'];   // Verwaltungsgeräte ohne eigene Aktivität (Update-Status), zählen nicht als Server
   const WATER = /pumpe|pump|bewässer|bewaesser|sprinkler|zisterne|ventil|valve|wasser(?!.*speicher)/i;
   let idxFor = null; let idx = {}; let resFor = null; let res = {};
   window.__hmcColorEntity = window.__hmcColorEntity || 'input_boolean.dashboard_farben';
+  const ensureIdx = (hass) => {
+    if (idxFor === hass.entities) return;
+    idxFor = hass.entities; idx = {};
+    for (const e of Object.values(hass.entities)) if (e.device_id && !e.hidden && !e.disabled_by) (idx[e.device_id] ||= []).push(e);
+  };
+  const UPD_ACT = { sec: 'pw', upd: 'ph', reboot: 'srv', ok: 'sw' };
+  const num = (st) => { const v = parseFloat(st?.state); return Number.isNaN(v) ? 0 : v; };
+  /** Update-Status eines vom Ultimate Updater verwalteten Systems:
+   * { sys: System (kein Updater-Gerät), s: 'sec'|'upd'|'reboot'|'ok'|'off', sec, other, reboot, reach, ents } */
+  window.__hmcUpd = (hass, devId) => {
+    ensureIdx(hass);
+    const r = { sys: false, s: '', sec: 0, other: 0, reboot: false, reach: null, e: {} };
+    for (const e of idx[devId] || []) {
+      const st = hass.states[e.entity_id]; if (!st) continue;
+      const k = `${e.translation_key || ''}|${e.entity_id}`.toLowerCase(); const dom = e.entity_id.split('.')[0];
+      if (dom === 'update') { r.sys = true; r.e.update = e.entity_id; }
+      else if (dom === 'binary_sensor' && st.attributes.device_class === 'connectivity') { r.reach = st.state === 'on'; r.e.reach = e.entity_id; }
+      else if (dom === 'binary_sensor' && /reboot|neustart/.test(k)) { r.reboot = st.state === 'on'; r.e.reboot = e.entity_id; }
+      else if (dom === 'sensor' && /security|sicherheit/.test(k)) { r.sec = num(st); r.e.sec = e.entity_id; }
+      else if (dom === 'sensor' && /other|weitere|normal/.test(k)) { r.other = num(st); r.e.other = e.entity_id; }
+      else if (dom === 'sensor' && /check_status|prufstatus|pruefstatus/.test(k)) r.e.check = e.entity_id;
+      else if (dom === 'sensor' && /last_check|letzte_pruf/.test(k)) r.e.last = e.entity_id;
+      else if (dom === 'sensor' && /last_job|letzter_job/.test(k)) r.e.job = e.entity_id;
+      else if (dom === 'button' && /check|prufen/.test(k)) r.e.check_btn = e.entity_id;
+      else if (dom === 'button' && /reboot|restart|neustart/.test(k)) r.e.reboot_btn = e.entity_id;
+    }
+    r.s = !r.sys ? '' : r.reach === false ? 'off' : r.sec > 0 ? 'sec' : r.other > 0 ? 'upd' : r.reboot ? 'reboot' : 'ok';
+    return r;
+  };
   /** { a: 'pw'|'li'|'sw'|'srv'|'', cap: Gerät kann aktiv sein, on: eingeschaltet bzw. betriebsbereit } */
   window.__hmcActRaw = (hass, devId) => {
     if (!hass || !devId || !hass.entities) return { a: '', cap: false, on: false };
-    if (idxFor !== hass.entities) {
-      idxFor = hass.entities; idx = {};
-      for (const e of Object.values(hass.entities)) if (e.device_id && !e.hidden && !e.disabled_by) (idx[e.device_id] ||= []).push(e);
-    }
+    ensureIdx(hass);
     if (resFor !== hass.states) { resFor = hass.states; res = {}; }
     if (res[devId]) return res[devId];
     const dv = hass.devices?.[devId]; const names = `${dv?.name_by_user || ''} ${dv?.name || ''}`;
+    const ents = idx[devId] || [];
+    if (ents.length && ents.every((e) => META.includes(e.platform))) {
+      // Ultimate Updater: Farbe nach Update-Status (rot Sicherheitsupdates, orange Updates, lila Neustart nötig, grün aktuell)
+      const u = window.__hmcUpd(hass, devId);
+      return (res[devId] = { a: UPD_ACT[u.s] || '', cap: u.sys, on: u.sys && u.s !== 'off', p: ents[0].platform, meta: true, u });
+    }
     let watt = 0; let run = false; let light = false; let sw = false; let cap = false; let srv = null; let online = false; let on2 = false; let water = false; let clim = false; let psw = false; let xs = false; let pwr = null; let plat = null;
     for (const e of idx[devId] || []) {
       const st = hass.states[e.entity_id];
@@ -34,7 +67,7 @@
       if (st.state !== 'unavailable') online = true;
       if (e.platform === 'xsense') xs = true;
       if (SRV.includes(e.platform)) {
-        srv ||= e.platform; if (e.platform === 'proxmoxve' || !plat) plat = e.platform;
+        srv ||= e.platform; if (e.platform !== 'pi_hole' || !plat) plat = e.platform;
         if (e.platform === 'pi_hole' && dom === 'switch' && !e.entity_category) srv = on ? 'on' : srv === 'on' ? 'on' : 'pi_hole';
         if (e.platform === 'proxmoxve' && dom === 'binary_sensor' && ['running', 'connectivity', 'power'].includes(a.device_class)) srv = on ? 'on' : srv === 'on' ? 'on' : 'proxmoxve';
         continue;
@@ -52,7 +85,11 @@
       if (dom === 'climate') { clim = true; cap = true; if (st.state !== 'off' && st.state !== 'unavailable') on2 = true; if (['heating', 'preheating'].includes(a.hvac_action)) run = true; } else if (dom === 'light') { cap = true; if (on) light = true; } else if (['switch', 'fan'].includes(dom) && !SETTING.test(`${a.friendly_name || ''} ${e.entity_id}`)) { cap = true; if (PSW.test(`${a.friendly_name || ''} ${e.entity_id}`)) { if (on) psw = true; } else if (on) sw = true; } else if (dom === 'binary_sensor' && a.device_class === 'running') { cap = true; if (on) run = true; } else if (dom === 'sensor' && a.device_class === 'enum' && /^(running|in_use|programmed|active|main_wash|drying|rinse|spin)$/i.test(st.state)) { cap = true; run = true; }
     }
     // Server/Pi-hole: aktiv = läuft (Proxmox) bzw. Blockieren an (Pi-hole); ohne Status-Entität reicht „erreichbar“
-    if (srv) { const up = srv === 'on' || (srv === 'proxmoxve' && online && !(idx[devId] || []).some((e) => e.entity_id.startsWith('binary_sensor.'))); return (res[devId] = { a: up ? (plat === 'proxmoxve' ? 'srv' : 'ph') : '', cap: true, on: up, p: plat }); }
+    // Synology: läuft = erreichbar; Volumes und Laufwerke (via_device) sind Teile des NAS, kein eigener Server
+    if (srv) {
+      const up = srv === 'on' || (srv === 'proxmoxve' && online && !(idx[devId] || []).some((e) => e.entity_id.startsWith('binary_sensor.'))) || (srv === 'synology_dsm' && online);
+      return (res[devId] = { a: up ? (plat === 'pi_hole' ? 'ph' : 'srv') : '', cap: true, on: up, p: plat, sub: plat === 'synology_dsm' && !!dv?.via_device_id });
+    }
     if (psw && !clim) sw = true; // „Power Switch“ ohne Thermostat = Ausgang einer Schaltdose
     const act = run || watt >= 10 ? 'pw' : xs && online ? 'xs' : water ? 'wa' : light ? 'li' : sw ? (WATER.test(names) ? 'wa' : 'sw') : '';
     return (res[devId] = { a: act, cap, on: !!act || (pwr !== null ? pwr : on2 || watt >= 1) });
@@ -7039,6 +7076,455 @@ if (!customElements.get('shelly-manager-card')) {
 
 }
 
+/* ===== synology-manager-card.js ===== */
+{
+/*
+ * Synology Manager Card – NAS-Übersicht im Stil der übrigen Manager Cards (Shelly, Proxmox, Pi-hole, …).
+ * Liest alle Geräte der Integration synology_dsm aus der Registry: je NAS eine Kachel mit CPU, RAM, Temperatur,
+ * Netzwerk, Volumes, Laufwerken, DSM-Update und Sicherheitsstatus. Wecken per Wake on LAN (Taste der Integration
+ * wake_on_lan mit derselben MAC wird automatisch gefunden), Neustart und Herunterfahren mit Rückfrage.
+ *
+ * Konfiguration (alle optional):
+ *   type: custom:synology-manager-card
+ *   integration: synology_dsm
+ *   min_width: 340
+ *   wol: { NAS-Homeserver: button.nas_homeserver_wecken }   # Wecktaste je NAS-Name, falls nicht automatisch gefunden
+ *   warn: 80                 # Volume-/RAM-Auslastung ab % gelb
+ *   crit: 95                 # ab % rot
+ */
+{
+const VERSION = '1.0.0';
+const BAD = ['unavailable', 'unknown'];
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const nf = (v, d = 0) => Number(v).toLocaleString('de-DE', { maximumFractionDigits: d });
+const keyOf = (ent) => `${ent.translation_key || ''} ${ent.entity_id}`.toLowerCase();
+
+function morph(target, html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  morphChildren(target, tpl.content);
+}
+function morphChildren(a, b) {
+  const an = [...a.childNodes]; const bn = [...b.childNodes];
+  bn.forEach((y, i) => {
+    const x = an[i];
+    if (!x) { a.appendChild(y); return; }
+    const same = x.nodeType === y.nodeType && (x.nodeType !== 1
+      || (x.tagName === y.tagName && (x.getAttribute('data-k') || '') === (y.getAttribute('data-k') || '')));
+    if (!same) { a.replaceChild(y, x); return; }
+    if (x.nodeType !== 1) { if (x.nodeValue !== y.nodeValue) x.nodeValue = y.nodeValue; return; }
+    // Eingebettete HA-Elemente (Tag mit Bindestrich) verwalten ihren Inhalt selbst: nur gesetzte Attribute abgleichen
+    const custom = x.tagName.includes('-');
+    if (!custom) for (const at of [...x.attributes]) if (!y.hasAttribute(at.name)) x.removeAttribute(at.name);
+    for (const at of [...y.attributes]) if (x.getAttribute(at.name) !== at.value) x.setAttribute(at.name, at.value);
+    if (!custom && !x.hasAttribute('data-keep')) morphChildren(x, y);
+  });
+  for (let i = bn.length; i < an.length; i++) an[i].remove();
+}
+
+const STYLE = `
+  :host { --mc-c: #4f7ec2; }
+  :host { display:block; padding:12px; box-sizing:border-box; }
+  * { box-sizing:border-box; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px 16px;
+    background: var(--app-header-background-color, var(--primary-color)); color: var(--app-header-text-color, #fff);
+    border-radius: var(--ha-card-border-radius, 12px); margin-bottom:12px; }
+  .toolbar .title { font-size:20px; font-weight:500; margin-right:auto; display:flex; align-items:center; gap:8px; }
+  .toolbar input, .toolbar select { background: rgba(255,255,255,.12); color: inherit; border: 1px solid rgba(255,255,255,.3);
+    border-radius: 8px; padding: 6px 10px; font: inherit; font-size:14px; }
+  .toolbar select option { color: var(--primary-text-color); background: var(--card-background-color); }
+  .toolbar input::placeholder { color: rgba(255,255,255,.7); }
+  .stats { font-size:13px; opacity:.9; width:100%; display:flex; gap:16px; flex-wrap:wrap; }
+  .grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fill, minmax(var(--smc-min, 320px), 1fr)); }
+  .dev { background: var(--ha-card-background, var(--card-background-color)); border-radius: var(--ha-card-border-radius, 12px);
+    box-shadow: var(--ha-card-box-shadow, none); border: 1px solid var(--divider-color); display:flex; flex-direction:column; overflow:hidden; }
+  .dev.offline { opacity:.55; }${window.__hmcActCss || ''}
+  .head { display:flex; align-items:center; gap:12px; padding:14px 14px 6px; }
+  .ico { position:relative; width:44px; height:44px; border-radius:10px; background: var(--secondary-background-color);
+    display:flex; align-items:center; justify-content:center; flex:none; }
+  .ico ha-icon { --mdc-icon-size:28px; color: var(--mc-c); }
+  .dev.warnst .ico ha-icon { color: var(--warning-color, #ffa600); }
+  .dot { position:absolute; right:-3px; bottom:-3px; width:14px; height:14px; border-radius:50%;
+    border:2px solid var(--card-background-color); background: var(--success-color, #43a047); }
+  .dev.warnst .dot { background: var(--warning-color, #ffa600); }
+  .offline .dot { background: var(--error-color, #db4437); }
+  .name { font-size:17px; font-weight:600; line-height:1.2; flex:1; min-width:0; overflow-wrap:anywhere; }
+  .name small { display:block; font-size:12px; font-weight:400; color: var(--secondary-text-color); }
+  .iconbtn { background:none; border:none; cursor:pointer; color: var(--secondary-text-color); padding:6px; border-radius:50%; line-height:0; }
+  .iconbtn:hover { background: var(--secondary-background-color); color: var(--primary-text-color); }
+  .iconbtn[disabled] { opacity:.35; cursor:default; }
+  .kpis { display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; padding: 6px 14px 4px; }
+  .kpi { background: var(--secondary-background-color); border-radius:10px; padding:8px 10px; cursor:pointer; min-width:0; }
+  .kpi b { display:block; font-size:18px; font-variant-numeric: tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .kpi span { font-size:12px; color: var(--secondary-text-color); }
+  .kpi.blk b { color: #e53935; }
+  .pbar { margin: 6px 14px 2px; height:8px; border-radius:4px; background: var(--divider-color); overflow:hidden; cursor:pointer; }
+  .pbar i { display:block; height:100%; background: linear-gradient(90deg, #e53935, #ff7043); border-radius:4px; }
+  .pl { display:flex; justify-content:space-between; padding: 2px 14px 0; font-size:12px; color: var(--secondary-text-color); }
+  .meta { padding: 8px 14px 8px; display:grid; grid-template-columns: auto 1fr; column-gap:12px; row-gap:2px; font-size:13px; }
+  .meta .k { color: var(--secondary-text-color); }
+  .meta .v { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-variant-numeric: tabular-nums; cursor:pointer; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; padding: 0 14px 8px; }
+  .chip { font-size:11px; padding:2px 8px; border-radius:10px; background: var(--secondary-background-color); color: var(--secondary-text-color);
+    display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
+  .chip ha-icon { --mdc-icon-size:14px; }
+  .chip.warn { background: rgba(255,166,0,.18); color: var(--warning-color, #ffa600); }
+  .chip.ok { background: rgba(67,160,71,.15); color: var(--success-color, #43a047); }
+  .chip.err { background: rgba(219,68,55,.15); color: var(--error-color, #db4437); }
+  .foot { display:flex; align-items:center; gap:4px; padding:6px 10px; border-top:1px solid var(--divider-color);
+    background: var(--secondary-background-color); margin-top:auto; flex-wrap:wrap; }
+  .foot .sp { flex:1; }
+  .pbtn { background:none; border:1px solid var(--divider-color); border-radius:8px; padding:4px 8px; font: inherit; font-size:12px; cursor:pointer;
+    color: var(--primary-text-color); display:inline-flex; align-items:center; gap:4px; }
+  .pbtn ha-icon { --mdc-icon-size:16px; }
+  .pbtn:hover { background: var(--card-background-color); }
+  .pbtn[disabled] { opacity:.4; cursor:default; }
+  .tog { position:relative; width:40px; height:22px; border-radius:11px; background: var(--switch-unchecked-track-color, #9e9e9e);
+    border:none; cursor:pointer; flex:none; transition: background .15s; }
+  .tog::after { content:''; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; transition:left .15s; }
+  .tog.on { background: var(--switch-checked-track-color, var(--primary-color)); }
+  .tog.on::after { left:21px; }
+  .tog[disabled] { opacity:.4; cursor:default; }
+  .tl { font-size:12px; color: var(--secondary-text-color); margin-right:4px; }
+
+  .bars { padding: 4px 14px 2px; display:flex; flex-direction:column; gap:6px; }
+  .bar { cursor:pointer; }
+  .bar .l { display:flex; justify-content:space-between; font-size:12px; color: var(--secondary-text-color); margin-bottom:2px; }
+  .bar .l b { color: var(--primary-text-color); font-weight:500; }
+  .bar .t { height:8px; border-radius:4px; background: var(--divider-color); overflow:hidden; }
+  .bar .t i { display:block; height:100%; border-radius:4px; background: var(--primary-color); }
+  .bar .t i.w { background: var(--warning-color, #ffa600); } .bar .t i.c { background: var(--error-color, #db4437); }
+  .disks { padding: 4px 14px 6px; display:flex; flex-direction:column; gap:2px; font-size:13px; }
+  .disk { display:flex; align-items:center; gap:8px; cursor:pointer; padding:3px 0; border-bottom: 1px solid var(--divider-color); }
+  .disk:last-child { border-bottom:none; }
+  .disk ha-icon { --mdc-icon-size:18px; color: var(--secondary-text-color); }
+  .disk .dn { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .disk .ds { font-size:12px; color: var(--success-color, #43a047); } .disk .ds.bad { color: var(--error-color, #db4437); }
+  .disk .dt { font-size:12px; color: var(--secondary-text-color); font-variant-numeric: tabular-nums; min-width:44px; text-align:right; }
+  .sect { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color: var(--secondary-text-color); padding: 8px 14px 0; }
+  .pbtn.warn { border-color: var(--warning-color, #ffa600); color: var(--warning-color, #ffa600); }
+  .pbtn.err { border-color: var(--error-color, #db4437); color: var(--error-color, #db4437); }
+  .pbtn.go { border-color: var(--success-color, #43a047); color: var(--success-color, #43a047); }
+  .empty { padding:24px; text-align:center; color: var(--secondary-text-color); }
+  [hidden] { display:none !important; }
+  .dlg-bg { position:fixed; inset:0; background: rgba(0,0,0,.45); z-index:100; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .dlg { background: var(--card-background-color); color: var(--primary-text-color); border-radius: 16px; width:min(640px, 100%);
+    max-height: calc(100vh - 32px); display:flex; flex-direction:column; box-shadow: 0 8px 32px rgba(0,0,0,.4); }
+  .dlg-h { display:flex; align-items:center; gap:12px; padding:16px 16px 8px 20px; }
+  .dlg-h .t { font-size:20px; font-weight:600; flex:1; }
+  .dlg-h ha-icon { --mdc-icon-size:30px; color:var(--mc-c); }
+  .dlg-web { display:flex; align-items:center; justify-content:center; gap:8px; margin: 0 20px 8px; padding:8px; border-radius:8px;
+    color: var(--primary-color); text-decoration:none; font-weight:500; border:1px solid var(--divider-color); }
+  .dlg-web:hover { background: var(--secondary-background-color); }
+  .dlg-b { overflow:auto; padding: 0 20px 16px; }
+  .dlg-b h4 { margin: 14px 0 4px; font-size:13px; text-transform:uppercase; letter-spacing:.04em; color: var(--secondary-text-color); }
+  .kv { display:flex; justify-content:space-between; gap:16px; padding:5px 0; font-size:14px; border-bottom:1px solid var(--divider-color); }
+  .kv:last-child { border-bottom:none; }
+  .kv .k { font-weight:600; }
+  .kv .v { text-align:right; word-break:break-all; font-variant-numeric: tabular-nums; }
+  .kv.e { cursor:pointer; } .kv.e .k { font-weight:400; color: var(--secondary-text-color); }
+  .dlg-f { display:flex; justify-content:flex-end; padding: 8px 16px 16px; }
+  .btn { background: var(--primary-color); color: var(--text-primary-color, #fff); border:none; border-radius:8px; padding:8px 18px; font: inherit; cursor:pointer; }
+`;
+
+const TK = (ent) => `${ent.translation_key || ''}|${ent.entity_id}`.toLowerCase();
+
+class SynologyManagerCard extends HTMLElement {
+  setConfig(config) {
+    this._config = { integration: 'synology_dsm', min_width: 340, warn: 80, crit: 95, wol: {}, ...config };
+    this._filter = this._filter || '';
+    if (!this.shadowRoot) { this.attachShadow({ mode: 'open' }); this._buildShell(); }
+  }
+
+  getCardSize() { return 8; }
+  getGridOptions() { return { columns: 'full' }; }
+  static getStubConfig() { return { integration: 'synology_dsm' }; }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._devices = this._collect();
+    this._renderGrid();
+    if (this._infoId) this._renderInfo();
+  }
+
+  disconnectedCallback() { if (this._dlgHost) this._closeInfo(); }
+
+  /* ---------- Daten ---------- */
+  _collect() {
+    const hass = this._hass;
+    if (!hass || !hass.entities || !hass.devices) return [];
+    const byDev = {};
+    for (const ent of Object.values(hass.entities)) {
+      if (ent.platform !== this._config.integration || !ent.device_id || ent.hidden) continue;
+      (byDev[ent.device_id] ||= []).push(ent);
+    }
+    const ids = Object.keys(byDev).filter((id) => hass.devices[id] && !hass.devices[id].disabled_by);
+    // Hauptgerät = NAS; Volumes und Laufwerke hängen per via_device_id daran
+    const mains = ids.filter((id) => !ids.includes(hass.devices[id].via_device_id));
+    const item = (ent, devName) => { const st = hass.states[ent.entity_id]; return st ? { id: ent.entity_id, st, ent, label: this._label(ent, st, devName) } : null; };
+    const out = [];
+    for (const id of mains) {
+      const reg = hass.devices[id];
+      const name = (reg.name_by_user || reg.name || id).trim();
+      const d = { id, reg, name, url: reg.configuration_url || '', host: '', model: reg.model || '', sw: reg.sw_version || '',
+        area: (reg.area_id && hass.areas?.[reg.area_id]?.name) || '', all: [], vols: [], disks: [], k: {} };
+      try { d.host = d.url ? new URL(d.url).hostname : ''; } catch (e) { /* ignore */ }
+      let unav = 0; let n = 0;
+      for (const ent of byDev[id]) {
+        const it = item(ent, name); if (!it) continue;
+        n++; if (it.st.state === 'unavailable') unav++;
+        d.all.push(it);
+        const k = TK(ent); const dom = ent.entity_id.split('.')[0];
+        const set = (key) => { d.k[key] ||= it; };
+        if (dom === 'update') set('update');
+        else if (dom === 'button') { if (/reboot|neu_starten|restart/.test(k)) set('reboot'); else if (/shutdown|herunterfahren/.test(k)) set('shutdown'); }
+        else if (dom === 'binary_sensor' && it.st.attributes.device_class === 'safety') set('security');
+        else if (dom === 'sensor') {
+          if (/cpu_total_load|cpu_auslastung_gesamt/.test(k)) set('cpu');
+          else if (/memory_real_usage|speichernutzung_real/.test(k)) set('ram');
+          else if (/memory_total_real|speicher_gesamt_real/.test(k)) set('ramTotal');
+          else if (/network_up|upload/.test(k)) set('up');
+          else if (/network_down|download/.test(k)) set('down');
+          else if (/uptime|betriebszeit/.test(k)) set('uptime');
+          else if (/cpu_5min|5_min/.test(k)) set('load5');
+          else if (it.st.attributes.device_class === 'temperature') set('temp');
+        }
+      }
+      // Volumes und Laufwerke
+      for (const cid of ids.filter((x) => hass.devices[x].via_device_id === id)) {
+        const cr = hass.devices[cid];
+        const cname = (cr.name_by_user || cr.name || cid).trim();
+        const short = cname.startsWith(name) ? cname.slice(name.length).replace(/^[\s(]+|[)\s]+$/g, '') : cname;
+        const c = { id: cid, name: short || cname, model: (cr.model || '').trim(), maker: (cr.manufacturer || '').trim(), k: {}, all: [] };
+        for (const ent of byDev[cid]) {
+          const it = item(ent, cname); if (!it) continue;
+          n++; if (it.st.state === 'unavailable') unav++;
+          c.all.push(it); d.all.push(it);
+          const k = TK(ent); const dom = ent.entity_id.split('.')[0];
+          const set = (key) => { c.k[key] ||= it; };
+          if (dom === 'binary_sensor') { if (it.st.state === 'on') (c.k.alarms ||= []).push(it); continue; }
+          if (/volume_percentage_used|volume_nutzung/.test(k)) set('pct');
+          else if (/volume_size_used|belegter/.test(k)) set('used');
+          else if (/volume_size_total|gesamtgr/.test(k)) set('total');
+          else if (/disk_smart_status|status_smart/.test(k)) set('smart');
+          else if (/status/.test(k)) set('status');
+          else if (it.st.attributes.device_class === 'temperature' && /temp_avg|durchschnitt|disk_temp|laufwerk_\d+_temp|_temperatur$/.test(k)) set('temp');
+        }
+        (/volume/i.test(cname) || c.k.pct ? d.vols : d.disks).push(c);
+      }
+      d.online = n > 0 && unav < n;
+      d.wol = this._config.wol?.[name] || this._findWol(reg);
+      d.updAvail = d.k.update && d.k.update.st.state === 'on';
+      d.unsafe = d.k.security && d.k.security.st.state === 'on';
+      d.alarms = [...d.vols, ...d.disks].flatMap((c) => c.k.alarms || []);
+      d.vols.sort((a, b) => a.name.localeCompare(b.name, 'de')); d.disks.sort((a, b) => a.name.localeCompare(b.name, 'de', { numeric: true }));
+      out.push(d);
+    }
+    return out.sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  }
+
+  /** Wake-on-LAN-Taste mit derselben MAC wie das NAS (Integration wake_on_lan) */
+  _findWol(reg) {
+    const hass = this._hass;
+    const macs = (reg.connections || []).filter(([t]) => t === 'mac').map(([, m]) => m.toLowerCase().replace(/[^0-9a-f]/g, ''));
+    if (!macs.length) return null;
+    for (const dv of Object.values(hass.devices)) {
+      if (dv.id === reg.id) continue;
+      if (!(dv.connections || []).some(([t, m]) => t === 'mac' && macs.includes(m.toLowerCase().replace(/[^0-9a-f]/g, '')))) continue;
+      const e = Object.values(hass.entities).find((x) => x.device_id === dv.id && x.platform === 'wake_on_lan' && x.entity_id.startsWith('button.'));
+      if (e) return e.entity_id;
+    }
+    const e = Object.values(hass.entities).find((x) => x.platform === 'wake_on_lan' && macs.some((m) => x.entity_id.replace(/_/g, '').includes(m)));
+    return e ? e.entity_id : null;
+  }
+
+  _label(ent, st, devName) {
+    let n = ent.name || st.attributes.friendly_name || ent.entity_id;
+    if (n.startsWith(devName)) n = n.slice(devName.length).trim();
+    return n || devName;
+  }
+
+  _n(item) { if (!item || BAD.includes(item.st.state)) return null; const v = parseFloat(item.st.state); return Number.isNaN(v) ? null : v; }
+
+  _val(st) {
+    if (!st) return '–';
+    if (typeof this._hass.formatEntityState === 'function') return esc(this._hass.formatEntityState(st));
+    const u = st.attributes.unit_of_measurement;
+    return esc(u ? `${st.state} ${u}` : st.state);
+  }
+
+  _lvl(p) { return p == null ? '' : p >= this._config.crit ? 'c' : p >= this._config.warn ? 'w' : ''; }
+
+  /* ---------- Rendering ---------- */
+  _buildShell() {
+    this.shadowRoot.innerHTML = `<style>${STYLE}</style>
+      <div class="toolbar">
+        <div class="title"><ha-icon icon="mdi:nas"></ha-icon>Synology</div>
+        <input id="q" type="search" placeholder="Filtern …">
+        <div class="stats" id="stats"></div>
+      </div>
+      <div class="grid" id="grid"></div>`;
+    this._dlgHost = document.createElement('div');
+    this._dlgHost.attachShadow({ mode: 'open' }).innerHTML = `<style>${STYLE}</style><div id="dlg"></div>`;
+    this._dlg = this._dlgHost.shadowRoot.getElementById('dlg');
+    const root = this.shadowRoot;
+    root.getElementById('q').addEventListener('input', (e) => { this._filter = e.target.value.toLowerCase(); this._renderGrid(); });
+    root.getElementById('grid').addEventListener('click', (e) => this._onClick(e));
+    this._dlg.addEventListener('click', (e) => {
+      if (e.target.classList?.contains('dlg-bg')) { this._closeInfo(); return; }
+      const path = e.composedPath();
+      if (!path.some((el) => el.dataset && el.dataset.act)) {
+        const more = path.find((el) => el.dataset && el.dataset.more);
+        if (more) { this._closeInfo(); this._fire('hass-more-info', { entityId: more.dataset.more }); return; }
+      }
+      this._onClick(e);
+    });
+  }
+
+  _renderGrid() {
+    const root = this.shadowRoot;
+    if (!root || !this._devices) return;
+    root.host.style.setProperty('--smc-min', `${this._config.min_width}px`);
+    const all = this._devices; const f = this._filter;
+    const list = all.filter((d) => !f || `${d.name} ${d.host} ${d.model} ${d.area}`.toLowerCase().includes(f));
+    const on = all.filter((d) => d.online).length;
+    morph(root.getElementById('stats'), `<span>${all.length} NAS</span><span>${on} online</span>${all.length - on ? `<span>${all.length - on} aus/offline</span>` : ''}
+      ${all.some((d) => d.updAvail) ? `<span>${all.filter((d) => d.updAvail).length} mit DSM-Update</span>` : ''}
+      ${all.some((d) => d.unsafe || d.alarms.length) ? '<span>Warnungen vorhanden</span>' : ''}`);
+    const html = list.length ? list.map((d) => this._tile(d)).join('') : '<div class="empty">Keine Synology-NAS gefunden.</div>';
+    if (html !== this._gridHtml) { morph(root.getElementById('grid'), html); this._gridHtml = html; }
+  }
+
+  _tile(d) {
+    const k = d.k;
+    const kpi = (it, label, digits = 0, unit = '') => `<div class="kpi" ${it ? `data-more="${it.id}"` : ''}><b>${this._n(it) != null ? `${nf(this._n(it), digits)}${unit}` : '–'}</b><span>${label}</span></div>`;
+    const bar = (label, pct, txt, more) => `<div class="bar" ${more ? `data-more="${more}"` : ''}><div class="l"><span>${label}</span><b>${txt}</b></div>
+      <div class="t"><i class="${this._lvl(pct)}" style="width:${pct != null ? Math.min(100, Math.max(0, pct)).toFixed(1) : 0}%"></i></div></div>`;
+    const ram = this._n(k.ram); const ramT = this._n(k.ramTotal);
+    const vols = d.vols.map((v) => {
+      const p = this._n(v.k.pct); const used = v.k.used ? this._val(v.k.used.st) : '';
+      const tot = v.k.total ? this._val(v.k.total.st) : '';
+      const st = v.k.status && !BAD.includes(v.k.status.st.state) && v.k.status.st.state !== 'normal' ? ` · ${esc(v.k.status.st.state)}` : '';
+      return bar(`${esc(v.name)}${st}`, p, `${p != null ? `${nf(p, 1)} %` : '–'}${used ? ` · ${used}${tot ? ` / ${tot}` : ''}` : ''}`, (v.k.pct || v.k.used)?.id);
+    }).join('');
+    const disks = d.disks.map((c) => {
+      const s = c.k.status || c.k.smart; const sv = s && !BAD.includes(s.st.state) ? s.st.state : '';
+      const bad = (sv && !/normal|ok|healthy/i.test(sv)) || (c.k.alarms || []).length;
+      return `<div class="disk" data-more="${(s || c.k.temp || c.all[0])?.id || ''}"><ha-icon icon="mdi:harddisk"></ha-icon>
+        <span class="dn">${esc(c.name)}${c.model ? ` <small style="color:var(--secondary-text-color)">${esc(c.model)}</small>` : ''}</span>
+        <span class="ds ${bad ? 'bad' : ''}">${bad ? ((c.k.alarms || []).length ? 'Warnung' : esc(sv)) : sv ? 'ok' : '–'}</span>
+        <span class="dt">${this._n(c.k.temp) != null ? `${nf(this._n(c.k.temp))} °C` : ''}</span></div>`;
+    }).join('');
+    const chips = [];
+    if (d.updAvail) chips.push(`<span class="chip warn" data-more="${k.update.id}"><ha-icon icon="mdi:package-up"></ha-icon>DSM ${esc(k.update.st.attributes.latest_version || 'Update')}</span>`);
+    else if (k.update && d.online) chips.push('<span class="chip ok"><ha-icon icon="mdi:check-circle-outline"></ha-icon>DSM aktuell</span>');
+    if (d.unsafe) chips.push(`<span class="chip err" data-more="${k.security.id}"><ha-icon icon="mdi:shield-alert-outline"></ha-icon>Sicherheitsberater: Warnung</span>`);
+    else if (k.security && d.online) chips.push(`<span class="chip ok" data-more="${k.security.id}"><ha-icon icon="mdi:shield-check-outline"></ha-icon>sicher</span>`);
+    for (const a of d.alarms) chips.push(`<span class="chip err" data-more="${a.id}"><ha-icon icon="mdi:harddisk-remove"></ha-icon>${esc(a.label)}</span>`);
+    if (!d.online) chips.push('<span class="chip err"><ha-icon icon="mdi:power-sleep"></ha-icon>aus oder nicht erreichbar</span>');
+    const r = window.__hmcActRaw ? window.__hmcActRaw(this._hass, d.id) : null;
+    const cls = `dev${d.online ? '' : ' offline'}${d.unsafe || d.alarms.length ? ' warnst' : ''}${window.__hmcCls ? window.__hmcCls(this._hass, r ? r.a : (d.online ? 'srv' : ''), true) : ''}`;
+    const can = (it) => it && !BAD.includes(it.st.state) && d.online;
+    return `<div class="${cls}" data-k="${d.id}">
+      <div class="head"><div class="ico"><ha-icon icon="mdi:nas"></ha-icon><span class="dot"></span></div>
+        <div class="name">${esc(d.name)}<small>${esc([d.model, d.host, d.area].filter(Boolean).join(' · '))}</small></div>
+        <button class="iconbtn" data-act="info" data-d="${d.id}" title="Details"><ha-icon icon="mdi:dots-vertical"></ha-icon></button></div>
+      ${d.online ? `<div class="kpis">${kpi(k.cpu, 'CPU', 0, ' %')}${kpi(k.ram, 'RAM', 0, ' %')}${kpi(k.temp, 'Temperatur', 0, ' °C')}</div>
+      <div class="bars">${bar('Arbeitsspeicher', ram, `${ram != null ? `${nf(ram)} %` : '–'}${ramT ? ` von ${nf(ramT / 1024, 1)} GB` : ''}`, k.ram?.id)}${vols}</div>
+      ${disks ? `<div class="sect">Laufwerke</div><div class="disks">${disks}</div>` : ''}
+      <div class="meta">${k.up ? `<span class="k">Upload</span><span class="v" data-more="${k.up.id}">${this._val(k.up.st)}</span>` : ''}
+        ${k.down ? `<span class="k">Download</span><span class="v" data-more="${k.down.id}">${this._val(k.down.st)}</span>` : ''}
+        ${k.load5 ? `<span class="k">Last (5 min)</span><span class="v" data-more="${k.load5.id}">${this._val(k.load5.st)}</span>` : ''}
+        ${k.uptime && !BAD.includes(k.uptime.st.state) ? `<span class="k">Läuft seit</span><span class="v" data-more="${k.uptime.id}">${this._val(k.uptime.st)}</span>` : ''}
+        ${d.sw ? `<span class="k">Version</span><span class="v">${esc(d.sw)}</span>` : ''}</div>` : '<div class="empty">Das NAS ist ausgeschaltet oder schläft.</div>'}
+      <div class="chips" ${chips.length ? '' : 'hidden'}>${chips.join('')}</div>
+      <div class="foot">
+        <button class="iconbtn" data-act="web" data-v="${esc(d.url)}" title="DSM öffnen" ${d.url ? '' : 'disabled'}><ha-icon icon="mdi:open-in-new"></ha-icon></button>
+        <span class="sp"></span>
+        ${d.wol ? `<button class="pbtn go" data-act="wake" data-e="${d.wol}" data-n="${esc(d.name)}" ${d.online ? 'disabled title="läuft bereits"' : 'title="per Wake on LAN einschalten"'}><ha-icon icon="mdi:power"></ha-icon>Wecken</button>` : ''}
+        ${k.update ? `<button class="pbtn warn" data-act="install" data-e="${k.update.id}" data-n="${esc(d.name)}" ${d.updAvail && can(k.update) && (k.update.st.attributes.supported_features & 1) ? '' : 'hidden'}><ha-icon icon="mdi:package-up"></ha-icon>Update</button>` : ''}
+        ${k.reboot ? `<button class="pbtn" data-act="press" data-e="${k.reboot.id}" data-q="${esc(d.name)} neu starten?" ${can(k.reboot) ? '' : 'disabled'}><ha-icon icon="mdi:restart"></ha-icon>Neustart</button>` : ''}
+        ${k.shutdown ? `<button class="pbtn err" data-act="press" data-e="${k.shutdown.id}" data-q="${esc(d.name)} herunterfahren?${d.wol ? '' : ' Ohne Wake on LAN lässt es sich nur am Gerät wieder einschalten.'}" ${can(k.shutdown) ? '' : 'disabled'}><ha-icon icon="mdi:power-standby"></ha-icon>Aus</button>` : ''}
+      </div></div>`;
+  }
+
+  _openInfo(id) { this._infoId = id; if (!this._dlgHost.isConnected) document.body.appendChild(this._dlgHost); this._renderInfo(); }
+
+  _closeInfo() { this._infoId = null; this._infoHtml = ''; this._dlg.innerHTML = ''; this._dlgHost.remove(); }
+
+  _renderInfo() {
+    const d = this._infoId && (this._devices || []).find((x) => x.id === this._infoId);
+    if (!d) { this._dlg.innerHTML = ''; return; }
+    const r = d.reg || {};
+    const mac = (r.connections || []).filter(([t]) => t === 'mac').map(([, m]) => m).join(', ');
+    const info = [['Hersteller', r.manufacturer], ['Modell', r.model], ['Version', r.sw_version], ['Adresse', d.host], ['MAC', mac],
+      ['Bereich', d.area], ['Wake on LAN', d.wol || 'nicht eingerichtet'], ['Status', d.online ? 'online' : 'aus oder offline']].filter(([, v]) => v);
+    const sortL = (a, b) => a.label.localeCompare(b.label, 'de');
+    const ent = (x) => `<div class="kv e" data-more="${x.id}"><span class="k">${esc(x.label)}</span><span class="v">${this._val(x.st)}</span></div>`;
+    const main = d.all.filter((x) => x.ent.device_id === d.id);
+    const subs = [...d.vols, ...d.disks].map((c) => `<h4>${esc(c.name)}${c.model ? ` · ${esc(c.model)}` : ''}</h4>${c.all.sort(sortL).map(ent).join('')}`).join('');
+    const html = `<div class="dlg-bg"><div class="dlg" role="dialog">
+      <div class="dlg-h"><ha-icon icon="mdi:nas"></ha-icon><span class="t">${esc(d.name)}</span>
+        <button class="iconbtn" data-act="close" title="Schließen"><ha-icon icon="mdi:close"></ha-icon></button></div>
+      ${d.url ? `<a class="dlg-web" href="${esc(d.url)}" target="_blank" rel="noopener"><ha-icon icon="mdi:web"></ha-icon>DSM öffnen</a>` : ''}
+      <div class="dlg-b"><h4>Gerät</h4>${info.map(([kk, v]) => `<div class="kv"><span class="k">${kk}</span><span class="v">${esc(v)}</span></div>`).join('')}
+        <h4>System</h4>${main.sort(sortL).map(ent).join('')}${subs}</div>
+      <div class="dlg-f"><button class="btn" data-act="close">Schließen</button></div></div></div>`;
+    if (html === this._infoHtml && this._dlg.firstElementChild) return;
+    const body = this._dlg.querySelector('.dlg-b'); const scroll = body ? body.scrollTop : 0;
+    if (this._dlg.firstElementChild) morph(this._dlg, html); else this._dlg.innerHTML = html;
+    this._infoHtml = html;
+    const nb = this._dlg.querySelector('.dlg-b'); if (nb) nb.scrollTop = scroll;
+  }
+
+  /* ---------- Aktionen ---------- */
+  _onClick(e) {
+    const path = e.composedPath();
+    const btn = path.find((el) => el.dataset && el.dataset.act);
+    if (btn) { e.stopPropagation(); if (!btn.disabled) this._action(btn.dataset); return; }
+    const more = path.find((el) => el.dataset && el.dataset.more);
+    if (more && more.dataset.more) this._fire('hass-more-info', { entityId: more.dataset.more });
+  }
+
+  async _action(ds) {
+    const hass = this._hass;
+    try {
+      switch (ds.act) {
+        case 'wake':
+          await hass.callService('button', 'press', { entity_id: ds.e });
+          this._fire('hass-notification', { message: `${ds.n}: Weckpaket gesendet, das Hochfahren dauert etwa 1–2 Minuten` });
+          break;
+        case 'press':
+          if (!window.confirm(ds.q)) break;
+          await hass.callService('button', 'press', { entity_id: ds.e });
+          break;
+        case 'install':
+          if (!window.confirm(`DSM-Update auf ${ds.n} installieren? Das NAS startet dabei neu.`)) break;
+          await hass.callService('update', 'install', { entity_id: ds.e });
+          break;
+        case 'web': if (ds.v) window.open(ds.v, '_blank', 'noopener'); break;
+        case 'info': this._openInfo(ds.d); break;
+        case 'close': this._closeInfo(); break;
+        default: break;
+      }
+    } catch (err) {
+      this._fire('hass-notification', { message: `Fehler: ${err.message || err}` });
+    }
+  }
+
+  _fire(type, detail) { this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true })); }
+}
+
+if (!customElements.get('synology-manager-card')) {
+  customElements.define('synology-manager-card', SynologyManagerCard);
+  window.customCards = window.customCards || [];
+  window.customCards.push({ type: 'synology-manager-card', name: 'Synology Manager', description: 'Synology-NAS mit Volumes, Laufwerken, Wake on LAN' });
+  console.info(`%c SYNOLOGY-MANAGER-CARD %c ${VERSION} `, 'background:#b5b5b6;color:#000', 'background:#eee;color:#333');
+}
+}
+
+}
+
 /* ===== tasmota-manager-card.js ===== */
 {
 /*
@@ -7949,6 +8435,462 @@ if (!customElements.get('tasmota-manager-card')) {
   window.customCards = window.customCards || [];
   window.customCards.push({ type: 'tasmota-manager-card', name: 'Tasmota Manager', description: 'Alle Tasmota-Geräte im Stil des ioBroker Device Managers, inkl. Firmware-Update' });
   console.info(`%c TASMOTA-MANAGER-CARD %c ${VERSION} `, 'background:#1fa3ec;color:#fff', 'background:#eee;color:#333');
+}
+
+}
+
+/* ===== updater-manager-card.js ===== */
+{
+/*
+ * Ultimate Updater Card – Update-Übersicht für den Proxmox Ultimate Updater (BassT23, Integration ultimate_updater)
+ * im Stil der übrigen Manager Cards. Je Updater-Instanz (Proxmox-Host) ein Kopfbereich mit Zusammenfassung,
+ * laufendem Job, Sammel-Update und Aktionen; darunter je System (Host, LXC, VM) eine Kachel mit Sicherheits- und
+ * weiteren Updates, Neustartbedarf, letzter Prüfung und den Tasten Prüfen, Aktualisieren und Neustart.
+ * Farben wie im Dashboard: rot Sicherheitsupdates, orange weitere Updates, lila Neustart nötig, grün aktuell.
+ *
+ * Konfiguration (alle optional):
+ *   type: custom:updater-manager-card
+ *   integration: ultimate_updater
+ *   min_width: 300
+ *   confirm: true            # Rückfrage vor Aktualisieren und Neustart
+ */
+{
+const VERSION = '1.0.0';
+const BAD = ['unavailable', 'unknown'];
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const nf = (v, d = 0) => Number(v).toLocaleString('de-DE', { maximumFractionDigits: d });
+const keyOf = (ent) => `${ent.translation_key || ''} ${ent.entity_id}`.toLowerCase();
+
+function morph(target, html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  morphChildren(target, tpl.content);
+}
+function morphChildren(a, b) {
+  const an = [...a.childNodes]; const bn = [...b.childNodes];
+  bn.forEach((y, i) => {
+    const x = an[i];
+    if (!x) { a.appendChild(y); return; }
+    const same = x.nodeType === y.nodeType && (x.nodeType !== 1
+      || (x.tagName === y.tagName && (x.getAttribute('data-k') || '') === (y.getAttribute('data-k') || '')));
+    if (!same) { a.replaceChild(y, x); return; }
+    if (x.nodeType !== 1) { if (x.nodeValue !== y.nodeValue) x.nodeValue = y.nodeValue; return; }
+    // Eingebettete HA-Elemente (Tag mit Bindestrich) verwalten ihren Inhalt selbst: nur gesetzte Attribute abgleichen
+    const custom = x.tagName.includes('-');
+    if (!custom) for (const at of [...x.attributes]) if (!y.hasAttribute(at.name)) x.removeAttribute(at.name);
+    for (const at of [...y.attributes]) if (x.getAttribute(at.name) !== at.value) x.setAttribute(at.name, at.value);
+    if (!custom && !x.hasAttribute('data-keep')) morphChildren(x, y);
+  });
+  for (let i = bn.length; i < an.length; i++) an[i].remove();
+}
+
+const STYLE = `
+  :host { --mc-c: #e57000; }
+  :host { display:block; padding:12px; box-sizing:border-box; }
+  * { box-sizing:border-box; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px 16px;
+    background: var(--app-header-background-color, var(--primary-color)); color: var(--app-header-text-color, #fff);
+    border-radius: var(--ha-card-border-radius, 12px); margin-bottom:12px; }
+  .toolbar .title { font-size:20px; font-weight:500; margin-right:auto; display:flex; align-items:center; gap:8px; }
+  .toolbar input, .toolbar select { background: rgba(255,255,255,.12); color: inherit; border: 1px solid rgba(255,255,255,.3);
+    border-radius: 8px; padding: 6px 10px; font: inherit; font-size:14px; }
+  .toolbar select option { color: var(--primary-text-color); background: var(--card-background-color); }
+  .toolbar input::placeholder { color: rgba(255,255,255,.7); }
+  .stats { font-size:13px; opacity:.9; width:100%; display:flex; gap:16px; flex-wrap:wrap; }
+  .grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fill, minmax(var(--smc-min, 320px), 1fr)); }
+  .dev { background: var(--ha-card-background, var(--card-background-color)); border-radius: var(--ha-card-border-radius, 12px);
+    box-shadow: var(--ha-card-box-shadow, none); border: 1px solid var(--divider-color); display:flex; flex-direction:column; overflow:hidden; }
+  .dev.offline { opacity:.55; }${window.__hmcActCss || ''}
+  .head { display:flex; align-items:center; gap:12px; padding:14px 14px 6px; }
+  .ico { position:relative; width:44px; height:44px; border-radius:10px; background: var(--secondary-background-color);
+    display:flex; align-items:center; justify-content:center; flex:none; }
+  .ico ha-icon { --mdc-icon-size:28px; color: var(--mc-c); }
+  .dev.warnst .ico ha-icon { color: var(--warning-color, #ffa600); }
+  .dot { position:absolute; right:-3px; bottom:-3px; width:14px; height:14px; border-radius:50%;
+    border:2px solid var(--card-background-color); background: var(--success-color, #43a047); }
+  .dev.warnst .dot { background: var(--warning-color, #ffa600); }
+  .offline .dot { background: var(--error-color, #db4437); }
+  .name { font-size:17px; font-weight:600; line-height:1.2; flex:1; min-width:0; overflow-wrap:anywhere; }
+  .name small { display:block; font-size:12px; font-weight:400; color: var(--secondary-text-color); }
+  .iconbtn { background:none; border:none; cursor:pointer; color: var(--secondary-text-color); padding:6px; border-radius:50%; line-height:0; }
+  .iconbtn:hover { background: var(--secondary-background-color); color: var(--primary-text-color); }
+  .iconbtn[disabled] { opacity:.35; cursor:default; }
+  .kpis { display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; padding: 6px 14px 4px; }
+  .kpi { background: var(--secondary-background-color); border-radius:10px; padding:8px 10px; cursor:pointer; min-width:0; }
+  .kpi b { display:block; font-size:18px; font-variant-numeric: tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .kpi span { font-size:12px; color: var(--secondary-text-color); }
+  .kpi.blk b { color: #e53935; }
+  .pbar { margin: 6px 14px 2px; height:8px; border-radius:4px; background: var(--divider-color); overflow:hidden; cursor:pointer; }
+  .pbar i { display:block; height:100%; background: linear-gradient(90deg, #e53935, #ff7043); border-radius:4px; }
+  .pl { display:flex; justify-content:space-between; padding: 2px 14px 0; font-size:12px; color: var(--secondary-text-color); }
+  .meta { padding: 8px 14px 8px; display:grid; grid-template-columns: auto 1fr; column-gap:12px; row-gap:2px; font-size:13px; }
+  .meta .k { color: var(--secondary-text-color); }
+  .meta .v { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-variant-numeric: tabular-nums; cursor:pointer; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; padding: 0 14px 8px; }
+  .chip { font-size:11px; padding:2px 8px; border-radius:10px; background: var(--secondary-background-color); color: var(--secondary-text-color);
+    display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
+  .chip ha-icon { --mdc-icon-size:14px; }
+  .chip.warn { background: rgba(255,166,0,.18); color: var(--warning-color, #ffa600); }
+  .chip.ok { background: rgba(67,160,71,.15); color: var(--success-color, #43a047); }
+  .chip.err { background: rgba(219,68,55,.15); color: var(--error-color, #db4437); }
+  .foot { display:flex; align-items:center; gap:4px; padding:6px 10px; border-top:1px solid var(--divider-color);
+    background: var(--secondary-background-color); margin-top:auto; flex-wrap:wrap; }
+  .foot .sp { flex:1; }
+  .pbtn { background:none; border:1px solid var(--divider-color); border-radius:8px; padding:4px 8px; font: inherit; font-size:12px; cursor:pointer;
+    color: var(--primary-text-color); display:inline-flex; align-items:center; gap:4px; }
+  .pbtn ha-icon { --mdc-icon-size:16px; }
+  .pbtn:hover { background: var(--card-background-color); }
+  .pbtn[disabled] { opacity:.4; cursor:default; }
+  .tog { position:relative; width:40px; height:22px; border-radius:11px; background: var(--switch-unchecked-track-color, #9e9e9e);
+    border:none; cursor:pointer; flex:none; transition: background .15s; }
+  .tog::after { content:''; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; transition:left .15s; }
+  .tog.on { background: var(--switch-checked-track-color, var(--primary-color)); }
+  .tog.on::after { left:21px; }
+  .tog[disabled] { opacity:.4; cursor:default; }
+  .tl { font-size:12px; color: var(--secondary-text-color); margin-right:4px; }
+
+  .bars { padding: 4px 14px 2px; display:flex; flex-direction:column; gap:6px; }
+  .bar { cursor:pointer; }
+  .bar .l { display:flex; justify-content:space-between; font-size:12px; color: var(--secondary-text-color); margin-bottom:2px; }
+  .bar .l b { color: var(--primary-text-color); font-weight:500; }
+  .bar .t { height:8px; border-radius:4px; background: var(--divider-color); overflow:hidden; }
+  .bar .t i { display:block; height:100%; border-radius:4px; background: var(--primary-color); }
+  .bar .t i.w { background: var(--warning-color, #ffa600); } .bar .t i.c { background: var(--error-color, #db4437); }
+  .disks { padding: 4px 14px 6px; display:flex; flex-direction:column; gap:2px; font-size:13px; }
+  .disk { display:flex; align-items:center; gap:8px; cursor:pointer; padding:3px 0; border-bottom: 1px solid var(--divider-color); }
+  .disk:last-child { border-bottom:none; }
+  .disk ha-icon { --mdc-icon-size:18px; color: var(--secondary-text-color); }
+  .disk .dn { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .disk .ds { font-size:12px; color: var(--success-color, #43a047); } .disk .ds.bad { color: var(--error-color, #db4437); }
+  .disk .dt { font-size:12px; color: var(--secondary-text-color); font-variant-numeric: tabular-nums; min-width:44px; text-align:right; }
+  .sect { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color: var(--secondary-text-color); padding: 8px 14px 0; }
+  .pbtn.warn { border-color: var(--warning-color, #ffa600); color: var(--warning-color, #ffa600); }
+  .pbtn.err { border-color: var(--error-color, #db4437); color: var(--error-color, #db4437); }
+  .pbtn.go { border-color: var(--success-color, #43a047); color: var(--success-color, #43a047); }
+  .empty { padding:24px; text-align:center; color: var(--secondary-text-color); }
+  [hidden] { display:none !important; }
+  .dlg-bg { position:fixed; inset:0; background: rgba(0,0,0,.45); z-index:100; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .dlg { background: var(--card-background-color); color: var(--primary-text-color); border-radius: 16px; width:min(640px, 100%);
+    max-height: calc(100vh - 32px); display:flex; flex-direction:column; box-shadow: 0 8px 32px rgba(0,0,0,.4); }
+  .dlg-h { display:flex; align-items:center; gap:12px; padding:16px 16px 8px 20px; }
+  .dlg-h .t { font-size:20px; font-weight:600; flex:1; }
+  .dlg-h ha-icon { --mdc-icon-size:30px; color:var(--mc-c); }
+  .dlg-web { display:flex; align-items:center; justify-content:center; gap:8px; margin: 0 20px 8px; padding:8px; border-radius:8px;
+    color: var(--primary-color); text-decoration:none; font-weight:500; border:1px solid var(--divider-color); }
+  .dlg-web:hover { background: var(--secondary-background-color); }
+  .dlg-b { overflow:auto; padding: 0 20px 16px; }
+  .dlg-b h4 { margin: 14px 0 4px; font-size:13px; text-transform:uppercase; letter-spacing:.04em; color: var(--secondary-text-color); }
+  .kv { display:flex; justify-content:space-between; gap:16px; padding:5px 0; font-size:14px; border-bottom:1px solid var(--divider-color); }
+  .kv:last-child { border-bottom:none; }
+  .kv .k { font-weight:600; }
+  .kv .v { text-align:right; word-break:break-all; font-variant-numeric: tabular-nums; }
+  .kv.e { cursor:pointer; } .kv.e .k { font-weight:400; color: var(--secondary-text-color); }
+  .dlg-f { display:flex; justify-content:flex-end; padding: 8px 16px 16px; }
+  .btn { background: var(--primary-color); color: var(--text-primary-color, #fff); border:none; border-radius:8px; padding:8px 18px; font: inherit; cursor:pointer; }
+`;
+
+const TK = (ent) => `${ent.translation_key || ''}|${ent.entity_id}`.toLowerCase();
+const CHECK = { ok: 'aktuell', up_to_date: 'aktuell', updates_available: 'Updates verfügbar', checking: 'wird geprüft', running: 'läuft',
+  error: 'Fehler', failed: 'fehlgeschlagen', unreachable: 'nicht erreichbar', none: '–', pending: 'ausstehend', skipped: 'übersprungen', not_checked: 'nicht geprüft' };
+const EVT = { completed: 'erfolgreich', completed_with_warnings: 'mit Warnungen', skipped: 'übersprungen', failed: 'fehlgeschlagen', interrupted: 'abgebrochen' };
+const JOB = { check: 'Prüfung', update: 'Update', update_all: 'Sammel-Update', security: 'Sicherheitsupdates', reboot: 'Neustart' };
+const STATE_TXT = { sec: 'Sicherheitsupdates', upd: 'Updates', reboot: 'Neustart nötig', ok: 'aktuell', off: 'nicht erreichbar' };
+
+function rel(ts) {
+  const t = Date.parse(ts); if (!t) return '–';
+  const s = Math.round((Date.now() - t) / 1000);
+  if (s < 60) return 'gerade eben';
+  if (s < 3600) return `vor ${Math.round(s / 60)} min`;
+  if (s < 86400) return `vor ${Math.round(s / 3600)} h`;
+  return `vor ${Math.round(s / 86400)} Tag${Math.round(s / 86400) === 1 ? '' : 'en'}`;
+}
+
+const EXTRA = `
+  .inst { grid-column: 1 / -1; background: var(--ha-card-background, var(--card-background-color)); border:1px solid var(--divider-color);
+    border-radius: var(--ha-card-border-radius, 12px); padding: 12px 14px; display:flex; flex-direction:column; gap:8px; margin-top:4px; }
+  .inst .ih { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .inst .ih ha-icon { --mdc-icon-size:26px; color: var(--mc-c); }
+  .inst .it { font-size:17px; font-weight:600; flex:1; min-width:160px; }
+  .inst .it small { display:block; font-size:12px; font-weight:400; color: var(--secondary-text-color); }
+  .inst .run { display:flex; align-items:center; gap:8px; font-size:13px; }
+  .inst .run .t { flex:1; height:6px; border-radius:3px; background: var(--divider-color); overflow:hidden; }
+  .inst .run .t i { display:block; height:100%; background: var(--primary-color); }
+  .inst .run .t i.ind { width:35%; animation: hmcslide 1.4s linear infinite; }
+  @keyframes hmcslide { from { margin-left:-35%; } to { margin-left:100%; } }
+  .inst .acts { display:flex; flex-wrap:wrap; gap:6px; }
+  .inst .last { font-size:12px; color: var(--secondary-text-color); cursor:pointer; }
+  .spin { animation: hmcspin 1.2s linear infinite; } @keyframes hmcspin { to { transform: rotate(360deg); } }
+  .kpi.sec b { color: var(--error-color, #db4437); } .kpi.upd b { color: var(--warning-color, #ffa600); }
+  .chip.lila { background: rgba(156,39,176,.15); color: #ab47bc; }
+`;
+
+class UpdaterManagerCard extends HTMLElement {
+  setConfig(config) {
+    this._config = { integration: 'ultimate_updater', min_width: 300, confirm: true, ...config };
+    this._filter = this._filter || '';
+    this._view = this._view || 'all';
+    if (!this.shadowRoot) { this.attachShadow({ mode: 'open' }); this._buildShell(); }
+  }
+
+  getCardSize() { return 8; }
+  getGridOptions() { return { columns: 'full' }; }
+  static getStubConfig() { return { integration: 'ultimate_updater' }; }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._data = this._collect();
+    this._render();
+    if (this._infoId) this._renderInfo();
+  }
+
+  connectedCallback() { this._tick ||= setInterval(() => { if (this._hass) { this._gridHtml = ''; this._render(); } }, 60000); }
+  disconnectedCallback() { clearInterval(this._tick); this._tick = null; if (this._dlgHost) this._closeInfo(); }
+
+  /* ---------- Daten ---------- */
+  _collect() {
+    const hass = this._hass;
+    if (!hass || !hass.entities || !hass.devices) return [];
+    const byDev = {};
+    for (const ent of Object.values(hass.entities)) {
+      if (ent.platform !== this._config.integration || !ent.device_id || ent.hidden) continue;
+      (byDev[ent.device_id] ||= []).push(ent);
+    }
+    const ids = Object.keys(byDev).filter((id) => hass.devices[id] && !hass.devices[id].disabled_by);
+    const it = (ent, dn) => { const st = hass.states[ent.entity_id]; if (!st) return null; let l = ent.name || st.attributes.friendly_name || ent.entity_id; if (l.startsWith(dn)) l = l.slice(dn.length).trim(); return { id: ent.entity_id, st, ent, label: l || dn }; };
+    const upd = window.__hmcUpd || (() => ({ sys: false }));
+    const insts = ids.filter((id) => !upd(hass, id).sys);
+    const out = insts.map((iid) => {
+      const reg = hass.devices[iid];
+      const inst = { id: iid, reg, area: (reg.area_id && hass.areas?.[reg.area_id]?.name) || '', sw: reg.sw_version || '', k: {}, all: [], systems: [] };
+      for (const ent of byDev[iid]) {
+        const x = it(ent, (reg.name_by_user || reg.name || '').trim()); if (!x) continue;
+        inst.all.push(x);
+        const k = TK(ent); const dom = ent.entity_id.split('.')[0]; const dc = x.st.attributes.device_class;
+        const set = (key) => { inst.k[key] ||= x; };
+        if (dom === 'event') set('event');
+        else if (dom === 'binary_sensor' && dc === 'update') set('self');
+        else if (dom === 'binary_sensor' && /sammel|bulk/.test(k)) set('bulkRun');
+        else if (dom === 'binary_sensor') set('jobRun');
+        else if (dom === 'button' && /sammel.*stop|bulk.*stop|stop/.test(k)) set('bulkStop');
+        else if (dom === 'button' && /abbrech|cancel/.test(k)) set('cancel');
+        else if (dom === 'button' && /sicherheit|security/.test(k)) set('updSec');
+        else if (dom === 'button' && /alle_vms|update_all|aktualisieren/.test(k)) set('updAll');
+        else if (dom === 'button' && /pruf|check/.test(k)) set('checkAll');
+        else if (dom === 'sensor' && /zusammenfassung|summary/.test(k)) set('summary');
+        else if (dom === 'sensor' && /fortschritt|progress/.test(k)) set('progress');
+        else if (dom === 'sensor' && /version/.test(k)) set('version');
+        else if (dom === 'sensor' && /erstellt|generated|created/.test(k)) set('created');
+      }
+      for (const sid of ids.filter((x) => hass.devices[x].via_device_id === iid)) {
+        const sr = hass.devices[sid]; const name = (sr.name_by_user || sr.name || sid).trim();
+        const u = upd(hass, sid); if (!u.sys) continue;
+        const s = { id: sid, reg: sr, name, model: sr.model || '', os: sr.sw_version || '', u, all: [] };
+        for (const ent of byDev[sid]) { const x = it(ent, name); if (x) s.all.push(x); }
+        inst.systems.push(s);
+      }
+      // Host zuerst, dann Container/VMs nach Name
+      inst.systems.sort((a, b) => (/host/i.test(b.model) - /host/i.test(a.model)) || a.name.localeCompare(b.name, 'de'));
+      const host = inst.systems.find((s) => /host/i.test(s.model));
+      inst.name = host ? host.name : (reg.name_by_user || reg.name || 'Ultimate Updater');
+      return inst;
+    });
+    return out.sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  }
+
+  _val(st) {
+    if (!st) return '–';
+    if (typeof this._hass.formatEntityState === 'function') return esc(this._hass.formatEntityState(st));
+    return esc(st.state);
+  }
+
+  /* ---------- Rendering ---------- */
+  _buildShell() {
+    this.shadowRoot.innerHTML = `<style>${STYLE}${EXTRA}</style>
+      <div class="toolbar">
+        <div class="title"><ha-icon icon="mdi:update"></ha-icon>Ultimate Updater</div>
+        <input id="q" type="search" placeholder="Filtern …">
+        <select id="view"><option value="all">Alle</option><option value="todo">Mit Updates</option><option value="sec">Sicherheitsupdates</option>
+          <option value="reboot">Neustart nötig</option><option value="off">Nicht erreichbar</option><option value="ok">Aktuell</option></select>
+        <div class="stats" id="stats"></div>
+      </div>
+      <div class="grid" id="grid"></div>`;
+    this._dlgHost = document.createElement('div');
+    this._dlgHost.attachShadow({ mode: 'open' }).innerHTML = `<style>${STYLE}${EXTRA}</style><div id="dlg"></div>`;
+    this._dlg = this._dlgHost.shadowRoot.getElementById('dlg');
+    const root = this.shadowRoot;
+    root.getElementById('q').addEventListener('input', (e) => { this._filter = e.target.value.toLowerCase(); this._render(); });
+    root.getElementById('view').addEventListener('change', (e) => { this._view = e.target.value; this._render(); });
+    root.getElementById('grid').addEventListener('click', (e) => this._onClick(e));
+    this._dlg.addEventListener('click', (e) => {
+      if (e.target.classList?.contains('dlg-bg')) { this._closeInfo(); return; }
+      const path = e.composedPath();
+      if (!path.some((el) => el.dataset && el.dataset.act)) {
+        const more = path.find((el) => el.dataset && el.dataset.more);
+        if (more) { this._closeInfo(); this._fire('hass-more-info', { entityId: more.dataset.more }); return; }
+      }
+      this._onClick(e);
+    });
+  }
+
+  _match(s) {
+    const st = s.u.s;
+    switch (this._view) {
+      case 'todo': return st === 'sec' || st === 'upd';
+      case 'sec': return st === 'sec';
+      case 'reboot': return s.u.reboot;
+      case 'off': return st === 'off';
+      case 'ok': return st === 'ok';
+      default: return true;
+    }
+  }
+
+  _render() {
+    const root = this.shadowRoot;
+    if (!root || !this._data) return;
+    root.host.style.setProperty('--smc-min', `${this._config.min_width}px`);
+    const sys = this._data.flatMap((i) => i.systems);
+    const c = (f) => sys.filter(f).length;
+    const sec = sys.reduce((a, s) => a + s.u.sec, 0); const oth = sys.reduce((a, s) => a + s.u.other, 0);
+    morph(root.getElementById('stats'), `<span>${this._data.length} Host${this._data.length === 1 ? '' : 's'} · ${sys.length} Systeme</span>
+      ${c((s) => s.u.s === 'sec' || s.u.s === 'upd') ? `<span>${c((s) => s.u.s === 'sec' || s.u.s === 'upd')} mit Updates (${sec} Sicherheit, ${oth} weitere)</span>` : '<span>alle aktuell</span>'}
+      ${c((s) => s.u.reboot) ? `<span>${c((s) => s.u.reboot)} Neustart nötig</span>` : ''}
+      ${c((s) => s.u.s === 'off') ? `<span>${c((s) => s.u.s === 'off')} nicht erreichbar</span>` : ''}`);
+    const f = this._filter;
+    const html = this._data.map((inst) => {
+      const list = inst.systems.filter((s) => this._match(s) && (!f || `${s.name} ${s.model} ${s.os} ${inst.name}`.toLowerCase().includes(f)));
+      return this._inst(inst) + (list.length ? list.map((s) => this._tile(s)).join('') : `<div class="empty" data-k="e${inst.id}" style="grid-column:1/-1">Keine Systeme in dieser Ansicht.</div>`);
+    }).join('') || '<div class="empty">Kein Ultimate Updater gefunden.</div>';
+    if (html !== this._gridHtml) { morph(root.getElementById('grid'), html); this._gridHtml = html; }
+  }
+
+  _inst(i) {
+    const k = i.k; const on = (x) => x && x.st.state === 'on'; const av = (x) => x && !BAD.includes(x.st.state);
+    const run = on(k.jobRun); const bulk = on(k.bulkRun);
+    const prog = k.progress && !BAD.includes(k.progress.st.state) ? parseFloat(k.progress.st.state) : null;
+    const ev = k.event && !BAD.includes(k.event.st.state) ? k.event.st : null;
+    const evTxt = ev ? `Letzter Job: ${esc(JOB[ev.attributes.job_type] || ev.attributes.job_type || 'Job')}${ev.attributes.target_name ? ` ${esc(ev.attributes.target_name)}` : ''} ${esc(EVT[ev.attributes.event_type] || ev.attributes.event_type || '')}, ${rel(ev.state)}` : '';
+    const btn = (x, act, icon, label, cls = '', show = true) => (x && show ? `<button class="pbtn ${cls}" data-act="${act}" data-e="${x.id}" data-n="${esc(label)}" ${av(x) ? '' : 'disabled'}><ha-icon icon="${icon}"></ha-icon>${label}</button>` : '');
+    const sub = [i.area, k.version ? `Updater ${this._val(k.version.st)}` : '', k.created && !BAD.includes(k.created.st.state) ? `Stand ${rel(k.created.st.state)}` : ''].filter(Boolean).join(' · ');
+    return `<div class="inst" data-k="i${i.id}">
+      <div class="ih"><ha-icon icon="mdi:server"></ha-icon><div class="it">${esc(i.name)}<small>${sub}</small></div>
+        ${on(k.self) ? `<span class="chip warn" data-more="${k.self.id}"><ha-icon icon="mdi:package-up"></ha-icon>Updater-Update verfügbar</span>` : ''}
+        ${k.summary ? `<span class="chip" data-more="${k.summary.id}"><ha-icon icon="mdi:text-box-outline"></ha-icon>Bericht</span>` : ''}
+        <button class="iconbtn" data-act="info" data-d="${i.id}" title="Details"><ha-icon icon="mdi:dots-vertical"></ha-icon></button></div>
+      ${run || bulk ? `<div class="run"><ha-icon class="spin" icon="mdi:sync"></ha-icon><span>${bulk ? 'Sammel-Update läuft' : 'Job läuft'}${prog != null ? ` · ${Math.round(prog)} %` : ''}</span>
+        <div class="t"><i class="${prog != null ? '' : 'ind'}" style="${prog != null ? `width:${Math.min(100, Math.max(0, prog))}%` : ''}"></i></div></div>` : ''}
+      <div class="acts">${btn(k.checkAll, 'press', 'mdi:magnify', 'Alle prüfen')}
+        ${btn(k.updSec, 'pressc', 'mdi:shield-sync-outline', 'Sicherheitsupdates installieren', 'err')}
+        ${btn(k.updAll, 'pressc', 'mdi:update', 'Alle aktualisieren', 'warn')}
+        ${btn(k.cancel, 'pressc', 'mdi:stop-circle-outline', 'Job abbrechen', '', run)}
+        ${btn(k.bulkStop, 'pressc', 'mdi:stop', 'Sammel-Update stoppen', '', bulk)}</div>
+      ${evTxt ? `<div class="last" data-more="${k.event.id}">${evTxt}</div>` : ''}</div>`;
+  }
+
+  _tile(s) {
+    const u = s.u; const hass = this._hass;
+    const icon = /host/i.test(s.model) ? 'mdi:server' : /virtual|vm/i.test(s.model) ? (/home assistant/i.test(s.os) ? 'mdi:home-assistant' : 'mdi:monitor') : 'mdi:package-variant-closed';
+    const st = (id) => (id ? hass.states[id] : null);
+    const chk = st(u.e.check); const last = st(u.e.last); const job = st(u.e.job); const upd = st(u.e.update);
+    const chkTxt = chk && !BAD.includes(chk.state) ? (CHECK[chk.state] || chk.state.replace(/_/g, ' ')) : '–';
+    const chips = [];
+    if (u.s === 'off') chips.push(`<span class="chip err" data-more="${u.e.reach || ''}"><ha-icon icon="mdi:lan-disconnect"></ha-icon>nicht erreichbar</span>`);
+    if (u.reboot) chips.push(`<span class="chip lila" data-more="${u.e.reboot}"><ha-icon icon="mdi:restart-alert"></ha-icon>Neustart erforderlich</span>`);
+    if (u.s === 'ok') chips.push('<span class="chip ok"><ha-icon icon="mdi:check-circle-outline"></ha-icon>aktuell</span>');
+    if (chk && /error|fail/i.test(chk.state)) chips.push(`<span class="chip err" data-more="${u.e.check}"><ha-icon icon="mdi:alert-circle-outline"></ha-icon>Prüfung fehlgeschlagen</span>`);
+    const r = window.__hmcActRaw ? window.__hmcActRaw(hass, s.id) : null;
+    const cls = `dev${u.s === 'off' ? ' offline' : ''}${window.__hmcCls ? window.__hmcCls(hass, r ? r.a : '', true) : ''}`;
+    const canInstall = upd && upd.state === 'on' && (upd.attributes.supported_features & 1) && !upd.attributes.in_progress;
+    const busy = upd && upd.attributes.in_progress;
+    const avail = (id) => id && st(id) && !BAD.includes(st(id).state);
+    return `<div class="${cls}" data-k="${s.id}">
+      <div class="head"><div class="ico"><ha-icon icon="${icon}"></ha-icon><span class="dot"></span></div>
+        <div class="name">${esc(s.name)}<small>${esc([s.model.replace('LXC container', 'LXC').replace('Virtual machine', 'VM').replace('Proxmox host', 'Host'), s.os].filter(Boolean).join(' · '))}</small></div>
+        <button class="iconbtn" data-act="info" data-d="${s.id}" title="Details"><ha-icon icon="mdi:dots-vertical"></ha-icon></button></div>
+      <div class="kpis"><div class="kpi ${u.sec ? 'sec' : ''}" data-more="${u.e.sec || ''}"><b>${u.sec}</b><span>Sicherheit</span></div>
+        <div class="kpi ${u.other ? 'upd' : ''}" data-more="${u.e.other || ''}"><b>${u.other}</b><span>Weitere</span></div>
+        <div class="kpi" data-more="${u.e.check || ''}"><b style="font-size:14px;line-height:22px">${esc(STATE_TXT[u.s] || chkTxt)}</b><span>Status</span></div></div>
+      <div class="meta"><span class="k">Letzte Prüfung</span><span class="v" data-more="${u.e.last || ''}">${last && !BAD.includes(last.state) ? rel(last.state) : '–'}</span>
+        <span class="k">Prüfstatus</span><span class="v" data-more="${u.e.check || ''}">${esc(chkTxt)}</span>
+        ${job && !BAD.includes(job.state) && job.state !== 'none' ? `<span class="k">Letzter Job</span><span class="v" data-more="${u.e.job}">${esc(JOB[job.state] || job.state)}</span>` : ''}
+        ${busy ? `<span class="k">Update</span><span class="v">läuft${upd.attributes.update_percentage != null ? ` · ${upd.attributes.update_percentage} %` : ''}</span>` : ''}</div>
+      <div class="chips" ${chips.length ? '' : 'hidden'}>${chips.join('')}</div>
+      <div class="foot">
+        ${u.e.check_btn ? `<button class="pbtn" data-act="press" data-e="${u.e.check_btn}" data-n="${esc(s.name)}" ${avail(u.e.check_btn) ? '' : 'disabled'} title="Auf Updates prüfen"><ha-icon icon="mdi:magnify"></ha-icon>Prüfen</button>` : ''}
+        <span class="sp"></span>
+        ${upd ? `<button class="pbtn ${u.sec ? 'err' : 'warn'}" data-act="install" data-e="${u.e.update}" data-n="${esc(s.name)}" ${canInstall ? '' : 'hidden'}><ha-icon icon="mdi:package-up"></ha-icon>Aktualisieren</button>` : ''}
+        ${u.e.reboot_btn ? `<button class="pbtn ${u.reboot ? 'warn' : ''}" data-act="reboot" data-e="${u.e.reboot_btn}" data-n="${esc(s.name)}" ${avail(u.e.reboot_btn) ? '' : 'disabled'}><ha-icon icon="mdi:restart"></ha-icon>Neustart</button>` : ''}
+      </div></div>`;
+  }
+
+  _openInfo(id) { this._infoId = id; if (!this._dlgHost.isConnected) document.body.appendChild(this._dlgHost); this._renderInfo(); }
+  _closeInfo() { this._infoId = null; this._infoHtml = ''; this._dlg.innerHTML = ''; this._dlgHost.remove(); }
+
+  _renderInfo() {
+    const id = this._infoId; if (!id) return;
+    const inst = (this._data || []).find((i) => i.id === id);
+    const sys = inst ? null : (this._data || []).flatMap((i) => i.systems).find((s) => s.id === id);
+    const x = inst || sys;
+    if (!x) { this._dlg.innerHTML = ''; return; }
+    const r = x.reg || {};
+    const info = [['Modell', r.model], ['Version', r.sw_version], ['Bereich', r.area_id && this._hass.areas?.[r.area_id]?.name]].filter(([, v]) => v);
+    const sortL = (a, b) => a.label.localeCompare(b.label, 'de');
+    const ent = (e) => `<div class="kv e" data-more="${e.id}"><span class="k">${esc(e.label)}</span><span class="v">${this._val(e.st)}</span></div>`;
+    const rep = inst && inst.k.summary ? inst.k.summary.st.attributes.report : '';
+    const html = `<div class="dlg-bg"><div class="dlg" role="dialog">
+      <div class="dlg-h"><ha-icon icon="${inst ? 'mdi:update' : 'mdi:package-variant-closed'}"></ha-icon><span class="t">${esc(inst ? `Ultimate Updater ${x.name}` : x.name)}</span>
+        <button class="iconbtn" data-act="close" title="Schließen"><ha-icon icon="mdi:close"></ha-icon></button></div>
+      <div class="dlg-b"><h4>Gerät</h4>${info.map(([k, v]) => `<div class="kv"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('')}
+        ${rep ? `<h4>Bericht</h4><pre style="white-space:pre-wrap;font-size:12px;margin:0">${esc(rep)}</pre>` : ''}
+        <h4>Entitäten</h4>${x.all.sort(sortL).map(ent).join('')}</div>
+      <div class="dlg-f"><button class="btn" data-act="close">Schließen</button></div></div></div>`;
+    if (html === this._infoHtml && this._dlg.firstElementChild) return;
+    const body = this._dlg.querySelector('.dlg-b'); const scroll = body ? body.scrollTop : 0;
+    if (this._dlg.firstElementChild) morph(this._dlg, html); else this._dlg.innerHTML = html;
+    this._infoHtml = html;
+    const nb = this._dlg.querySelector('.dlg-b'); if (nb) nb.scrollTop = scroll;
+  }
+
+  /* ---------- Aktionen ---------- */
+  _onClick(e) {
+    const path = e.composedPath();
+    const btn = path.find((el) => el.dataset && el.dataset.act);
+    if (btn) { e.stopPropagation(); if (!btn.disabled) this._action(btn.dataset); return; }
+    const more = path.find((el) => el.dataset && el.dataset.more);
+    if (more && more.dataset.more) this._fire('hass-more-info', { entityId: more.dataset.more });
+  }
+
+  async _action(ds) {
+    const hass = this._hass; const c = this._config.confirm;
+    try {
+      switch (ds.act) {
+        case 'press': await hass.callService('button', 'press', { entity_id: ds.e }); break;
+        case 'pressc':
+          if (c && !window.confirm(`${ds.n}?`)) break;
+          await hass.callService('button', 'press', { entity_id: ds.e }); break;
+        case 'install':
+          if (c && !window.confirm(`Updates auf ${ds.n} installieren?`)) break;
+          await hass.callService('update', 'install', { entity_id: ds.e }); break;
+        case 'reboot':
+          if (c && !window.confirm(`${ds.n} neu starten?`)) break;
+          await hass.callService('button', 'press', { entity_id: ds.e }); break;
+        case 'info': this._openInfo(ds.d); break;
+        case 'close': this._closeInfo(); break;
+        default: break;
+      }
+    } catch (err) {
+      this._fire('hass-notification', { message: `Fehler: ${err.message || err}` });
+    }
+  }
+
+  _fire(type, detail) { this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true })); }
+}
+
+if (!customElements.get('updater-manager-card')) {
+  customElements.define('updater-manager-card', UpdaterManagerCard);
+  window.customCards = window.customCards || [];
+  window.customCards.push({ type: 'updater-manager-card', name: 'Ultimate Updater', description: 'Update-Übersicht des Proxmox Ultimate Updaters' });
+  console.info(`%c UPDATER-MANAGER-CARD %c ${VERSION} `, 'background:#e57000;color:#fff', 'background:#eee;color:#333');
+}
 }
 
 }
@@ -9660,7 +10602,7 @@ if (!customElements.get('home-summary-card')) {
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.11.0';
+const VERSION = '2.12.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -9691,7 +10633,7 @@ const APPS = [
 ];
 const PLUG = /messdose|steckdose|zwischenstecker|plug/i;
 // Integrationslinks, deren Farbe sich aus den aktiven Geräten ergibt (andere mit auto_color: true)
-const AUTO_LINKS = ['esphome', 'grohe_smarthome', 'localthings', 'miele_lan', 'ojmicroline_thermostat', 'shelly', 'tasmota', 'xsense', 'pi_hole', 'proxmoxve'];
+const AUTO_LINKS = ['esphome', 'grohe_smarthome', 'localthings', 'miele_lan', 'ojmicroline_thermostat', 'shelly', 'tasmota', 'xsense', 'pi_hole', 'proxmoxve', 'synology_dsm', 'ultimate_updater'];
 const APPS_EXCL = /ha-mcp|mcp server/i;   // Dienste, keine Geräte
 const DWD_COLOR = ['var(--disabled-color, #9e9e9e)', '#ffeb3b', '#ff9800', '#f44336', '#9c27b0'];
 const DWD_TEXT = ['keine Warnung', 'Wetterwarnung', 'Markantes Wetter', 'Unwetterwarnung', 'Extremes Unwetter'];
@@ -10650,7 +11592,19 @@ class HomeDashboardCard extends HTMLElement {
         || (dom === 'media_player' && st.state === 'playing') || (dom === 'vacuum' && st.state === 'cleaning')
         || (dom === 'binary_sensor' && st.attributes.device_class === 'running' && st.state === 'on')) act++;
     }
-    const ids = Object.keys(devs).filter((id) => hass.devices[id] && !hass.devices[id].disabled_by);
+    let ids = Object.keys(devs).filter((id) => hass.devices[id] && !hass.devices[id].disabled_by);
+    // Volumes/Laufwerke eines NAS sind keine eigenen Geräte
+    if (window.__hmcActRaw) ids = ids.filter((id) => !window.__hmcActRaw(hass, id).sub);
+    // Ultimate Updater: verwaltete Systeme zählen; Badge = Systeme mit Updates oder Neustartbedarf, Farbe = dringendster Zustand
+    if (window.__hmcUpd && integration === 'ultimate_updater') {
+      const us = ids.map((id) => window.__hmcUpd(hass, id)).filter((u) => u.sys);
+      const order = ['sec', 'upd', 'reboot', 'ok'];
+      const worst = order.find((k) => us.some((u) => u.s === k));
+      const col = { sec: 'pw', upd: 'ph', reboot: 'srv', ok: 'sw' }[worst];
+      return (this._lsCache[integration] = { n: us.length, off: us.filter((u) => u.s === 'off').length, upd: us.filter((u) => u.s === 'sec' || u.s === 'upd').length,
+        act: us.filter((u) => ['sec', 'upd', 'reboot'].includes(u.s)).length, color: col ? window.__hmcColors[col] : null,
+        reboot: us.filter((u) => u.reboot).length, unit: 'System' });
+    }
     const off = ids.filter((id) => devs[id].every((s) => s.state === 'unavailable')).length;
     // aktive Geräte: mindestens eine Entität eingeschaltet bzw. in Betrieb
     const isAct = (st) => {
@@ -10690,9 +11644,16 @@ class HomeDashboardCard extends HTMLElement {
       const info = [];
       if (l.integration) {
         const s = this._linkStats(l.integration);
-        info.push(`${s.n} Gerät${s.n === 1 ? '' : 'e'}`);
-        if (s.n) info.push(...(s.off ? [`<span class="ok">${s.n - s.off} online</span>`, `<span class="err">${s.off} offline</span>`] : ['<span class="ok">alle online</span>']));
-        if (s.upd) info.push(`<span class="warn">${s.upd} Update${s.upd === 1 ? '' : 's'}</span>`);
+        if (s.unit) {
+          info.push(`${s.n} ${s.unit}${s.n === 1 ? '' : 'e'}`);
+          info.push(s.upd ? `<span class="warn">${s.upd} mit Updates</span>` : '<span class="ok">alle aktuell</span>');
+          if (s.reboot) info.push(`<span class="warn">${s.reboot} Neustart</span>`);
+          if (s.off) info.push(`<span class="err">${s.off} nicht erreichbar</span>`);
+        } else {
+          info.push(`${s.n} Gerät${s.n === 1 ? '' : 'e'}`);
+          if (s.n) info.push(...(s.off ? [`<span class="ok">${s.n - s.off} online</span>`, `<span class="err">${s.off} offline</span>`] : ['<span class="ok">alle online</span>']));
+          if (s.upd) info.push(`<span class="warn">${s.upd} Update${s.upd === 1 ? '' : 's'}</span>`);
+        }
       }
       if (l.entity && hass.states[l.entity]) {
         const st = hass.states[l.entity];
@@ -10705,7 +11666,10 @@ class HomeDashboardCard extends HTMLElement {
         else info.push(s.warn ? `<span class="warn">${s.warn} Warnung${s.warn === 1 ? '' : 'en'}</span>` : '<span class="ok">keine Fehler</span>');
       }
       let badge = '';
-      if (l.integration) { const a = this._linkStats(l.integration).act; if (a) badge = `<span class="bdg" title="${a} aktiv">${a}</span>`; }
+      if (l.integration) {
+        const ls = this._linkStats(l.integration); const a = ls.act;
+        if (a) badge = ls.unit ? `<span class="bdg ${ls.color === window.__hmcColors?.pw ? 'err' : 'warn'}" title="${a} ${ls.unit}${a === 1 ? '' : 'e'} mit Updates oder Neustartbedarf">${a}</span>` : `<span class="bdg" title="${a} aktiv">${a}</span>`;
+      }
       if (l.popup === 'integrations' && this._entries) {
         const ms = this._monDomains().map((d) => this._monitor(d));
         const e = ms.filter((m) => m.lvl === 2).length; const w = ms.filter((m) => m.lvl === 1).length;
@@ -10778,7 +11742,8 @@ class HomeDashboardCard extends HTMLElement {
       const name = `${d.name_by_user || d.name || ''} ${d.model || ''}`;
       const r = window.__hmcActRaw ? window.__hmcActRaw(hass, d.id) : { a: '', on: false };
       // Proxmox-Geräte sind immer Server, Pi-hole-Geräte immer Pi-hole – unabhängig vom Namen (z. B. Container „pihole-backup“)
-      const g = APPS_EXCL.test(name) ? null : r.p ? APPS.find((x) => x.k === (r.p === 'proxmoxve' ? 'server' : 'pihole')) : APPS.find((x) => x.re.test(name));
+      if (r.meta || r.sub) continue; // Update-Verwaltung bzw. Volume/Laufwerk eines NAS
+      const g = APPS_EXCL.test(name) ? null : r.p ? APPS.find((x) => x.k === (r.p === 'pi_hole' ? 'pihole' : 'server')) : APPS.find((x) => x.re.test(name));
       if (!g) continue;
       if (!r.on) continue; // ausgeschaltet oder nicht erreichbar: kein Symbol
       const x = (groups[g.k] ||= { g, plug: 0, dev: 0, act: 0, kinds: new Set() });
@@ -11299,4 +12264,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.12.1 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.13.0 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
