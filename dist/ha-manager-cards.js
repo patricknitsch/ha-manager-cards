@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.13.1 – 16 Karten: awtrix-screen-card, esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, synology-manager-card, tasmota-manager-card, updater-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.14.0 – 16 Karten: awtrix-screen-card, esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, synology-manager-card, tasmota-manager-card, updater-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== 00-activity.js ===== */
 {
@@ -10590,6 +10590,7 @@ if (!customElements.get('home-summary-card')) {
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  *   admin_only: [pi_hole, proxmoxve, xsense]   # Integrationen nur für Administratoren (Links, Räume, Zähler)
  *   links: [{ …, admin: true }]                # einzelnen Link nur Administratoren zeigen
+ *   links: [{ …, group: devices }]            # Umschalter Geräte/Links: devices oder links (Standard: Geräte-Integrationen → devices); link_switch: false schaltet ihn ab
  *   links: [{ …, unit: Panel, badge: count }]  # eigene Einheit statt „Gerät“; Badge = Anzahl der Geräte statt der aktiven
  *   links: [{ …, auto_color: false }]          # Geräte-Integrationen färben sich nach ihren aktiven Geräten (häufigste Farbe); true schaltet es für weitere ein
  *   popup_opacity: 50                         # Deckkraft der Popups in % (100 = deckend), popup_blur: 10 (px), popup_dim: 20 (% Abdunklung)
@@ -10603,7 +10604,7 @@ if (!customElements.get('home-summary-card')) {
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.12.1';
+const VERSION = '2.13.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -10635,6 +10636,8 @@ const APPS = [
 const PLUG = /messdose|steckdose|zwischenstecker|plug/i;
 // Integrationslinks, deren Farbe sich aus den aktiven Geräten ergibt (andere mit auto_color: true)
 const AUTO_LINKS = ['esphome', 'grohe_smarthome', 'localthings', 'miele_lan', 'ojmicroline_thermostat', 'shelly', 'tasmota', 'xsense', 'pi_hole', 'proxmoxve', 'synology_dsm', 'ultimate_updater'];
+// Links dieser Integrationen gehören zur Gruppe „Geräte“ (Umschalter Geräte/Links)
+const DEVICE_LINKS = ['esphome', 'grohe_smarthome', 'localthings', 'miele_lan', 'ojmicroline_thermostat', 'shelly', 'tasmota', 'xsense', 'pi_hole', 'proxmoxve', 'synology_dsm'];
 const APPS_EXCL = /ha-mcp|mcp server/i;   // Dienste, keine Geräte
 const DWD_COLOR = ['var(--disabled-color, #9e9e9e)', '#ffeb3b', '#ff9800', '#f44336', '#9c27b0'];
 const DWD_TEXT = ['keine Warnung', 'Wetterwarnung', 'Markantes Wetter', 'Unwetterwarnung', 'Extremes Unwetter'];
@@ -10730,6 +10733,14 @@ const STYLE = `
   .click:hover { background-color: var(--secondary-background-color); }
   .click:active { transform: scale(.99); }
   h2 { margin: 6px 0 10px 4px; font-size: 18px; font-weight: 600; display:flex; align-items:center; gap:8px; }
+  #linksec h2 { justify-content: space-between; margin-right: 4px; }
+  .seg { display:inline-flex; background: var(--secondary-background-color); border:1px solid var(--divider-color); border-radius: 10px; padding:2px; gap:2px; }
+  .seg[hidden] { display:none; }
+  .seg button { font: inherit; font-size: 12.5px; font-weight: 500; border:none; background:none; color: var(--secondary-text-color); cursor:pointer;
+    padding: 4px 10px; border-radius: 8px; display:inline-flex; align-items:center; gap:5px; }
+  .seg button.on { background: var(--card-background-color); color: var(--primary-text-color); box-shadow: 0 1px 2px rgba(0,0,0,.18); }
+  .seg button i { font-style:normal; font-size: 11px; min-width: 16px; height: 16px; line-height:16px; border-radius: 8px; padding: 0 4px; box-sizing:border-box;
+    background: #ff9800; color:#fff; text-align:center; } .seg button i:empty { display:none; } .seg button i.err { background:#f44336; }
   h2 small { font-size: 13px; font-weight: 400; color: var(--secondary-text-color); }
 
   /* Kopf, Status-Icons und Haus über die volle Breite; darunter Seiten und Räume immer nebeneinander */
@@ -11167,7 +11178,7 @@ class HomeDashboardCard extends HTMLElement {
         <main class="main">
           <section id="haussec"><h2>Haus</h2><div id="haus" class="card haus click" data-pop="power"></div></section>
           <div class="cols">
-            <section id="linksec"><h2>Seiten</h2><div id="links" class="links"></div></section>
+            <section id="linksec"><h2><span>Seiten</span><span class="seg" id="lkseg" hidden><button type="button" data-lg="devices">Geräte<i></i></button><button type="button" data-lg="links">Links<i></i></button></span></h2><div id="links" class="links"></div></section>
             <section><h2>Räume <small id="rcount"></small></h2><div id="rooms" class="rooms"></div></section>
           </div>
         </main>
@@ -11645,9 +11656,19 @@ class HomeDashboardCard extends HTMLElement {
     return any ? n : null;
   }
 
+  /** Gruppe eines Links: group: devices | links; ohne Angabe Geräte-Integrationen → Geräte, sonst Links */
+  _linkGroup(l) { return l.group || (l.integration && DEVICE_LINKS.includes(l.integration) ? 'devices' : 'links'); }
+
   _renderLinks() {
     const hass = this._hass;
-    const html = (this._config.links || []).map((l, i) => {
+    const links = this._config.links || [];
+    // Umschalter Geräte/Links, sobald beide Gruppen Einträge haben (Auswahl je Browser gemerkt)
+    if (!this._lg) { try { this._lg = localStorage.getItem('hmc-linkgroup') || 'devices'; } catch (e) { this._lg = 'devices'; } }
+    const groups = new Set(links.map((l) => this._linkGroup(l)));
+    const split = this._config.link_switch !== false && groups.has('devices') && groups.has('links');
+    const warnOf = { devices: 0, links: 0 }; const errOf = { devices: false, links: false };
+    const html = links.map((l, i) => {
+      const grp = this._linkGroup(l);
       // Nur für Administratoren: admin: true, Log- und Integrations-Popup, Integrationen aus admin_only
       if (!hass.user?.is_admin && (l.admin || ['log', 'integrations'].includes(l.popup)
         || (l.integration && (this._config.admin_only || []).includes(l.integration)))) return '';
@@ -11696,12 +11717,22 @@ class HomeDashboardCard extends HTMLElement {
       // ohne aktives Gerät grau (alles aus bzw. deaktiviert)
       const isAuto = l.integration && (l.auto_color ?? AUTO_LINKS.includes(l.integration));
       const auto = isAuto ? this._linkStats(l.integration).color || 'var(--disabled-color, #9e9e9e)' : null;
+      // Hinweiszahl am Umschalter: Fehler/Warnungen (rote/orange Badges) der jeweils ausgeblendeten Gruppe
+      if (/bdg (err|warn)/.test(badge)) { warnOf[grp] += Number((badge.match(/>(\d+)</) || [])[1]) || 1; if (/bdg err/.test(badge)) errOf[grp] = true; }
+      if (split && grp !== this._lg) return '';
       return `<div class="card lk click" data-k="l${i}" data-link="${i}" style="--c:${esc(auto || l.color || 'var(--primary-color)')}">
         <div class="bub">${badge}<ha-icon icon="${esc(l.icon || 'mdi:open-in-app')}"></ha-icon></div>
         <div class="n"><b>${esc(l.name || l.path)}</b><span>${info.join(' · ')}</span></div><ha-icon icon="mdi:chevron-right"></ha-icon></div>`;
     }).join('');
     this._set('links', html);
-    this.shadowRoot.getElementById('linksec').hidden = !html;
+    const seg = this.shadowRoot.getElementById('lkseg');
+    seg.hidden = !split;
+    for (const b of seg.querySelectorAll('button')) {
+      const g = b.dataset.lg; b.classList.toggle('on', g === this._lg);
+      const n = g === this._lg ? '' : String(warnOf[g] || ''); const i = b.querySelector('i');
+      if (i.textContent !== n) i.textContent = n; i.classList.toggle('err', errOf[g]);
+    }
+    this.shadowRoot.getElementById('linksec').hidden = !html && !split;
   }
 
   _spark(id) {
@@ -11920,6 +11951,8 @@ class HomeDashboardCard extends HTMLElement {
     if (act) { e.stopPropagation(); this._action(act.dataset); return; }
     const more = path.find((el) => el.dataset && el.dataset.more);
     if (more && more.dataset.more) { e.stopPropagation(); this._fire('hass-more-info', { entityId: more.dataset.more }); return; }
+    const lg = path.find((el) => el.dataset && el.dataset.lg);
+    if (lg) { this._lg = lg.dataset.lg; try { localStorage.setItem('hmc-linkgroup', this._lg); } catch (err) { /* ignore */ } this._renderLinks(); return; }
     const link = path.find((el) => el.dataset && el.dataset.link);
     if (link) {
       const l = this._config.links[Number(link.dataset.link)];
@@ -12279,4 +12312,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.13.1 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.14.0 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');

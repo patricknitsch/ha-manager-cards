@@ -40,7 +40,7 @@ Updates kommen über den Marketplace, sobald ein neues Release angelegt ist.
 `dist/ha-manager-cards.js` nach `/config/www/ha-manager-cards/` kopieren und als Ressource (Typ *JavaScript-Modul*) eintragen:
 
 ```
-/local/ha-manager-cards/ha-manager-cards.js?v=1.13.1
+/local/ha-manager-cards/ha-manager-cards.js?v=1.14.0
 ```
 
 Bei jedem Update die Versionsnummer in der URL erhöhen, sonst lädt der Browser die alte Datei aus dem Cache.
@@ -108,6 +108,14 @@ Der Link zum Ultimate Updater zählt die Systeme mit Updates oder Neustartbedarf
 `auto_color: true` schaltet es für weitere Integrationen ein.
 `unit: Panel` ersetzt „Gerät“ in der Beschreibung, `badge: count` zeigt im Badge die Anzahl der Geräte statt der aktiven.
 Der AWTRIX-Studio-Link (`integration: awtrix_studio`, `path: /awtrix-studio`) zeigt zusätzlich, wie viele Apps eingeschaltet sind.
+
+### Umschalter Geräte/Links
+
+Sobald es Links beider Gruppen gibt, schaltet ein Umschalter neben „Seiten“ zwischen **Geräte** und **Links** um; die Auswahl
+merkt sich der Browser. Zu den Geräten gehören Links zu ESPHome, Grohe, LocalThings, Miele, Schlüter, Shelly, Tasmota, X-Sense,
+Pi-hole, Proxmox und Synology, alles andere zu den Links. `group: devices` bzw. `group: links` am Link legt die Gruppe fest
+(z. B. für den Speicher), `link_switch: false` zeigt wieder alle Links untereinander. Hat die ausgeblendete Gruppe Warnungen
+(z. B. Updates oder gestörte Integrationen), steht ihre Anzahl am Umschalter.
 
 ### Popups
 
