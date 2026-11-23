@@ -40,7 +40,7 @@ Updates kommen über den Marketplace, sobald ein neues Release angelegt ist.
 `dist/ha-manager-cards.js` nach `/config/www/ha-manager-cards/` kopieren und als Ressource (Typ *JavaScript-Modul*) eintragen:
 
 ```
-/local/ha-manager-cards/ha-manager-cards.js?v=1.14.0
+/local/ha-manager-cards/ha-manager-cards.js?v=1.14.1
 ```
 
 Bei jedem Update die Versionsnummer in der URL erhöhen, sonst lädt der Browser die alte Datei aus dem Cache.

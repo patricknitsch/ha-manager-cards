@@ -31,7 +31,7 @@
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.13.0';
+const VERSION = '2.13.1';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -160,11 +160,22 @@ const STYLE = `
   .click:hover { background-color: var(--secondary-background-color); }
   .click:active { transform: scale(.99); }
   h2 { margin: 6px 0 10px 4px; font-size: 18px; font-weight: 600; display:flex; align-items:center; gap:8px; }
-  #linksec h2 { justify-content: space-between; margin-right: 4px; }
+  #linksec h2 { justify-content: space-between; margin-right: 4px; flex-wrap: wrap; row-gap: 6px; min-width:0; }
+  #linksec h2 > span:first-child { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .seg { max-width: 100%; box-sizing: border-box; }
+  /* schmale Spalte (Handy): Überschrift weglassen, Umschalter über die ganze Spaltenbreite */
+  @media (max-width: 700px) {
+    #linksec h2.has-seg > span:first-child { display:none; }
+    #linksec h2.has-seg .seg { flex: 1 1 100%; }
+    .seg button { flex: 1 1 0; min-width:0; justify-content:center; padding: 5px 4px; gap: 3px; }
+    .seg button .t { display:none; } .seg button ha-icon { display:inline-flex; }
+  }
   .seg { display:inline-flex; background: var(--secondary-background-color); border:1px solid var(--divider-color); border-radius: 10px; padding:2px; gap:2px; }
   .seg[hidden] { display:none; }
   .seg button { font: inherit; font-size: 12.5px; font-weight: 500; border:none; background:none; color: var(--secondary-text-color); cursor:pointer;
     padding: 4px 10px; border-radius: 8px; display:inline-flex; align-items:center; gap:5px; }
+  .seg button ha-icon { display:none; --mdc-icon-size: 18px; flex:none; }
+  .seg button i { flex:none; }
   .seg button.on { background: var(--card-background-color); color: var(--primary-text-color); box-shadow: 0 1px 2px rgba(0,0,0,.18); }
   .seg button i { font-style:normal; font-size: 11px; min-width: 16px; height: 16px; line-height:16px; border-radius: 8px; padding: 0 4px; box-sizing:border-box;
     background: #ff9800; color:#fff; text-align:center; } .seg button i:empty { display:none; } .seg button i.err { background:#f44336; }
@@ -605,7 +616,7 @@ class HomeDashboardCard extends HTMLElement {
         <main class="main">
           <section id="haussec"><h2>Haus</h2><div id="haus" class="card haus click" data-pop="power"></div></section>
           <div class="cols">
-            <section id="linksec"><h2><span>Seiten</span><span class="seg" id="lkseg" hidden><button type="button" data-lg="devices">Geräte<i></i></button><button type="button" data-lg="links">Links<i></i></button></span></h2><div id="links" class="links"></div></section>
+            <section id="linksec"><h2><span>Seiten</span><span class="seg" id="lkseg" hidden><button type="button" data-lg="devices" title="Geräte"><ha-icon icon="mdi:devices"></ha-icon><span class="t">Geräte</span><i></i></button><button type="button" data-lg="links" title="Links"><ha-icon icon="mdi:link-variant"></ha-icon><span class="t">Links</span><i></i></button></span></h2><div id="links" class="links"></div></section>
             <section><h2>Räume <small id="rcount"></small></h2><div id="rooms" class="rooms"></div></section>
           </div>
         </main>
@@ -1153,7 +1164,7 @@ class HomeDashboardCard extends HTMLElement {
     }).join('');
     this._set('links', html);
     const seg = this.shadowRoot.getElementById('lkseg');
-    seg.hidden = !split;
+    seg.hidden = !split; seg.parentNode.classList.toggle('has-seg', split);
     for (const b of seg.querySelectorAll('button')) {
       const g = b.dataset.lg; b.classList.toggle('on', g === this._lg);
       const n = g === this._lg ? '' : String(warnOf[g] || ''); const i = b.querySelector('i');
