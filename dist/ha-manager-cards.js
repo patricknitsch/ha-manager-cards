@@ -1,4 +1,4 @@
-/*! HA Manager Cards 1.14.1 – 16 Karten: awtrix-screen-card, esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, synology-manager-card, tasmota-manager-card, updater-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
+/*! HA Manager Cards 1.15.0 – 16 Karten: awtrix-screen-card, esphome-manager-card, grohe-manager-card, localthings-manager-card, miele-manager-card, pihole-manager-card, proxmox-manager-card, schlueter-manager-card, senec-manager-card, shelly-manager-card, synology-manager-card, tasmota-manager-card, updater-manager-card, xsense-manager-card, area-overview-card, home-dashboard-card */
 
 /* ===== 00-activity.js ===== */
 {
@@ -10590,6 +10590,7 @@ if (!customElements.get('home-summary-card')) {
  *   makers: [{ type: custom:shelly-manager-card, … }]   # für die Raum-Popups
  *   admin_only: [pi_hole, proxmoxve, xsense]   # Integrationen nur für Administratoren (Links, Räume, Zähler)
  *   links: [{ …, admin: true }]                # einzelnen Link nur Administratoren zeigen
+ *   water: sensor.x                            # Wasserverbrauch heute im Haus (Statistik-ID oder Liste); ohne Angabe die Wasserquellen des Energy Dashboards, false = aus
  *   links: [{ …, group: devices }]            # Umschalter Geräte/Links: devices oder links (Standard: Geräte-Integrationen → devices); link_switch: false schaltet ihn ab
  *   links: [{ …, unit: Panel, badge: count }]  # eigene Einheit statt „Gerät“; Badge = Anzahl der Geräte statt der aktiven
  *   links: [{ …, auto_color: false }]          # Geräte-Integrationen färben sich nach ihren aktiven Geräten (häufigste Farbe); true schaltet es für weitere ein
@@ -10604,7 +10605,7 @@ if (!customElements.get('home-summary-card')) {
  *   switches: true                             # Statuskachel „Schalter an/aus“ (Steckdosen, Relais, Messdosen); false blendet sie aus
  */
 {
-const VERSION = '2.13.1';
+const VERSION = '2.14.0';
 const BAD = ['unavailable', 'unknown'];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (st) => { if (!st || BAD.includes(st.state)) return null; const v = parseFloat(st.state); return Number.isNaN(v) ? null : v; };
@@ -10735,23 +10736,26 @@ const STYLE = `
   h2 { margin: 6px 0 10px 4px; font-size: 18px; font-weight: 600; display:flex; align-items:center; gap:8px; }
   #linksec h2 { justify-content: space-between; margin-right: 4px; flex-wrap: wrap; row-gap: 6px; min-width:0; }
   #linksec h2 > span:first-child { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .seg { max-width: 100%; box-sizing: border-box; }
-  /* schmale Spalte (Handy): Überschrift weglassen, Umschalter über die ganze Spaltenbreite */
+  /* Umschalter Geräte/Links: aktive Stellung in Primärfarbe, damit sie in hellen und dunklen Themes erkennbar ist */
+  .seg { display:inline-flex; max-width:100%; box-sizing:border-box; padding:3px; gap:3px; border-radius: 12px;
+    background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); border: 1px solid color-mix(in srgb, var(--primary-text-color) 14%, transparent); }
+  .seg[hidden] { display:none; }
+  .seg button { font: inherit; font-size: 12.5px; font-weight: 500; border:none; background:none; color: var(--secondary-text-color); cursor:pointer;
+    padding: 4px 10px; border-radius: 9px; display:inline-flex; align-items:center; gap:5px; transition: background .15s, color .15s; }
+  .seg button:not(.on):hover { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); color: var(--primary-text-color); }
+  .seg button.on { background: var(--primary-color); color: var(--text-primary-color, #fff); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .seg button ha-icon { display:none; --mdc-icon-size: 18px; flex:none; }
+  .seg button i { flex:none; font-style:normal; font-size: 11px; min-width: 16px; height: 16px; line-height:16px; border-radius: 8px; padding: 0 4px; box-sizing:border-box;
+    background: #ff9800; color:#fff; text-align:center; }
+  .seg button i:empty { display:none; } .seg button i.err { background:#f44336; }
+  /* schmale Spalte (Handy): Überschrift weglassen, Umschalter über die ganze Spaltenbreite, Symbole statt Text */
   @media (max-width: 700px) {
     #linksec h2.has-seg > span:first-child { display:none; }
     #linksec h2.has-seg .seg { flex: 1 1 100%; }
-    .seg button { flex: 1 1 0; min-width:0; justify-content:center; padding: 5px 4px; gap: 3px; }
-    .seg button .t { display:none; } .seg button ha-icon { display:inline-flex; }
+    .seg button { flex: 1 1 0; min-width:0; justify-content:center; padding: 6px 4px; gap: 3px; }
+    .seg button .t { display:none; }
+    .seg button ha-icon { display:inline-flex; }
   }
-  .seg { display:inline-flex; background: var(--secondary-background-color); border:1px solid var(--divider-color); border-radius: 10px; padding:2px; gap:2px; }
-  .seg[hidden] { display:none; }
-  .seg button { font: inherit; font-size: 12.5px; font-weight: 500; border:none; background:none; color: var(--secondary-text-color); cursor:pointer;
-    padding: 4px 10px; border-radius: 8px; display:inline-flex; align-items:center; gap:5px; }
-  .seg button ha-icon { display:none; --mdc-icon-size: 18px; flex:none; }
-  .seg button i { flex:none; }
-  .seg button.on { background: var(--card-background-color); color: var(--primary-text-color); box-shadow: 0 1px 2px rgba(0,0,0,.18); }
-  .seg button i { font-style:normal; font-size: 11px; min-width: 16px; height: 16px; line-height:16px; border-radius: 8px; padding: 0 4px; box-sizing:border-box;
-    background: #ff9800; color:#fff; text-align:center; } .seg button i:empty { display:none; } .seg button i.err { background:#f44336; }
   h2 small { font-size: 13px; font-weight: 400; color: var(--secondary-text-color); }
 
   /* Kopf, Status-Icons und Haus über die volle Breite; darunter Seiten und Räume immer nebeneinander */
@@ -11040,7 +11044,7 @@ class HomeDashboardCard extends HTMLElement {
 
   connectedCallback() {
     clearInterval(this._tick);
-    this._tick = setInterval(() => { this._renderHeader(); this._fetchCal(); this._fetchHist(); this._fetchForecast(); this._renderHaus(); this._fetchLog(); this._fetchSys(); }, 30000);
+    this._tick = setInterval(() => { this._renderHeader(); this._fetchCal(); this._fetchHist(); this._fetchForecast(); this._fetchWater(); this._renderHaus(); this._fetchLog(); this._fetchSys(); }, 30000);
     this._onHide = () => this._render();
     HIDE.subs.add(this._onHide);
   }
@@ -11058,6 +11062,7 @@ class HomeDashboardCard extends HTMLElement {
     if (!this._calTs) this._fetchCal();
     if (!this._histTs) this._fetchHist();
     if (!this._fcTs) this._fetchForecast();
+    if (!this._wTs) this._fetchWater();
     if (!this._logTs) this._fetchLog();
     if (!this._sysTs) this._fetchSys();
   }
@@ -11450,6 +11455,8 @@ class HomeDashboardCard extends HTMLElement {
     if (grid != null) val(grid < 0 ? 'mdi:transmission-tower-import' : 'mdi:transmission-tower-export', '#9c27b0', grid < 0 ? 'Einspeisung' : 'Netzbezug', fW(Math.abs(grid)), '', pw.grid);
     const fc = this._fc;
     if (fc) val('mdi:weather-sunny-alert', '#ffb300', 'Prognose heute', `${nf(fc.total / 1000, 1)} kWh`, fc.rest != null ? `noch ${nf(fc.rest / 1000, 1)} kWh` : '', '');
+    const wt = this._water;
+    if (wt) val('mdi:water', '#03a9f4', 'Wasser heute', wt.l != null ? `${nf(wt.l, wt.l < 100 ? 1 : 0)} l` : `${nf(wt.v, 2)} ${esc(wt.unit)}`, '', wt.id && hass.states[wt.id] ? wt.id : '');
     const html = `<div class="hh"><div class="bub"><ha-icon icon="mdi:home-lightning-bolt"></ha-icon></div>
         <div class="t"><small>Stromverbrauch</small><b>${fW(house)}</b></div><div class="vals">${vals.join('')}</div></div>
       <div class="chart">${this._chart()}</div>
@@ -11562,6 +11569,39 @@ class HomeDashboardCard extends HTMLElement {
     } finally {
       this._histTs = Date.now(); this._histBusy = false;
       if (this._hass) { this._renderHaus(); this._renderRooms(); }
+    }
+  }
+
+  /** heutiger Wasserverbrauch: Änderung der Statistik seit Mitternacht. Quelle: water (Statistik-ID oder Liste),
+   * sonst die Wasserquellen des Energy Dashboards; water: false schaltet es ab. Alle 5 min. */
+  async _fetchWater() {
+    const hass = this._hass; const cfg = this._config.water;
+    if (!hass || cfg === false || this._wBusy || (this._wTs && Date.now() - this._wTs < 5 * 60000)) return;
+    this._wBusy = true;
+    try {
+      let ids = cfg ? [].concat(cfg) : null;
+      if (!ids) {
+        const prefs = await hass.callWS({ type: 'energy/get_prefs' });
+        ids = (prefs?.energy_sources || []).filter((x) => x.type === 'water').map((x) => x.stat_consumption).filter(Boolean);
+      }
+      if (!ids.length) { this._water = null; return; }
+      let sum = 0; let unit = ''; let ok = false;
+      for (const id of ids) {
+        const r = await hass.callWS({ type: 'recorder/statistic_during_period', statistic_id: id, calendar: { period: 'day' }, types: ['change'] });
+        if (r && r.change != null) { sum += Number(r.change) || 0; ok = true; }
+        unit ||= hass.states[id]?.attributes?.unit_of_measurement || '';
+      }
+      if (!ok) { this._water = null; return; }
+      if (!unit) { try { const md = await hass.callWS({ type: 'recorder/get_statistics_metadata', statistic_ids: [ids[0]] }); unit = md?.[0]?.statistics_unit_of_measurement || ''; } catch (e) { /* ignore */ } }
+      const u = unit.toLowerCase();
+      const l = u === 'm³' || u === 'm3' ? sum * 1000 : u === 'l' || u === 'liter' ? sum : null;
+      this._water = { v: sum, unit: unit || 'm³', l, id: ids[0] };
+    } catch (err) {
+      console.info('home-dashboard-card: Wasserverbrauch nicht abrufbar', err);
+      this._water = null;
+    } finally {
+      this._wTs = Date.now(); this._wBusy = false;
+      if (this._hass) this._renderHaus();
     }
   }
 
@@ -12323,4 +12363,4 @@ if (!customElements.get('home-dashboard-card')) {
 
 }
 
-console.info('%c HA-MANAGER-CARDS %c 1.14.1 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');
+console.info('%c HA-MANAGER-CARDS %c 1.15.0 ', 'background:#03a9f4;color:#fff', 'background:#eee;color:#333');

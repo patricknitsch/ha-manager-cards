@@ -40,7 +40,7 @@ Updates kommen über den Marketplace, sobald ein neues Release angelegt ist.
 `dist/ha-manager-cards.js` nach `/config/www/ha-manager-cards/` kopieren und als Ressource (Typ *JavaScript-Modul*) eintragen:
 
 ```
-/local/ha-manager-cards/ha-manager-cards.js?v=1.14.1
+/local/ha-manager-cards/ha-manager-cards.js?v=1.15.0
 ```
 
 Bei jedem Update die Versionsnummer in der URL erhöhen, sonst lädt der Browser die alte Datei aus dem Cache.
@@ -95,6 +95,8 @@ Seiten und Räume scrollen getrennt in Bildschirmhöhe (`section_height`, Standa
 ### Termine und Haus-Graph
 
 - **Termine:** heutige Termine aus den Kalendern, ganztägige zuerst, vergangene blass. `calendars` wählt Kalender aus, `calendar_max: 6` begrenzt die Anzahl.
+- **Wasser:** Neben PV, Akku und Netz steht der heutige Wasserverbrauch (seit Mitternacht, aus der Statistik). Quelle sind die Wasserquellen
+  des Energy Dashboards; `water: sensor.x` wählt eine andere Statistik, `water: false` blendet den Wert aus.
 - **Netz:** Der Haus-Graph zeigt `power.grid` mit Vorzeichen als lila Fläche: Bezug oberhalb, Einspeisung unterhalb der Nulllinie.
 
 ### Links und Badges
